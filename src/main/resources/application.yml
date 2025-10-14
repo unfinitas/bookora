@@ -37,6 +37,7 @@ spring:
     locations: classpath:db/migration
     baseline-version: 0
 
+
   # Security
   security:
     filter:
