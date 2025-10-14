@@ -37,6 +37,7 @@ public class GuestAccessToken extends BaseEntity {
     private LocalDateTime expiresAt;
 
     @Column(name = "used_at")
+    @Builder.Default
     private LocalDateTime usedAt = null;
 
     /**
