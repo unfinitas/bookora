@@ -38,7 +38,9 @@ erDiagram
 
     t_user {
         uuid id PK
-        string full_name
+        string username UK "uq_user_username"
+        string first_name
+        string last_name
         string email UK "uq_user_email"
         string password
         string role "GUEST, CUSTOMER, PROVIDER"
@@ -146,16 +148,20 @@ erDiagram
 ## Project Structure
 
 ```
-fi.unfinitas.bookora
-├── config/         # Configuration classes
-├── controller/     # REST controllers
-├── domain/         # Domain entities
-├── repository/     # JPA repositories
-├── service/        # Business logic
-├── dto/            # Data Transfer Objects
-├── mapper/         # MapStruct mappers
-├── security/       # Security configuration
-└── exception/      # Exception handling
+src/main/java/fi/unfinitas/bookora
+├── config
+├── controller
+├── domain
+├── dto
+├── exception
+├── mapper
+├── repository
+├── security
+├── service
+
+src/main/resources
+├── application.yml
+└── db/migration
 ```
 
 ## Development
