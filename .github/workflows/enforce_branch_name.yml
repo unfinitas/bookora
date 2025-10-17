@@ -1,0 +1,47 @@
+name: Enforce Branch Name Format
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  check-branch-name:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate branch name
+        run: |
+          BRANCH_NAME="${{ github.head_ref }}"
+          echo "Checking branch name: $BRANCH_NAME"
+          
+          # Check length limit
+          if [[ ${#BRANCH_NAME} -gt 80 ]]; then
+            echo "Branch name is too long: ${#BRANCH_NAME} characters (max 80)"
+            exit 1
+          fi
+          
+          # Validate format: PROJECT-NUMBER--description
+          # - PROJECT: 2+ uppercase letters (e.g., PROJ, ABC)
+          # - NUMBER: ticket/issue number (e.g., 123)
+          # - description: lowercase words separated by single dashes
+          if [[ ! "$BRANCH_NAME" =~ ^[A-Z]{2,}-[0-9]+--[a-z0-9]+(-[a-z0-9]+)*$ ]]; then
+            echo "Invalid branch name: '$BRANCH_NAME'"
+            echo ""
+            echo "Expected format: <PROJECT>-<NUMBER>--<description>"
+            echo "  - PROJECT: 2+ uppercase letters (e.g., PROJ, ABC)"
+            echo "  - NUMBER: ticket/issue number (e.g., 123)"
+            echo "  - description: lowercase words separated by single dashes"
+            echo ""
+            echo "Valid examples:"
+            echo "  - PROJ-101--add-login-api"
+            echo "  - ABC-42--fix-user-bug"
+            echo "  - TEAM-999--update-docs"
+            echo ""
+            echo "Invalid examples:"
+            echo "  - proj-101--add-login (project must be uppercase)"
+            echo "  - PROJ-101-add-login (must use double dash --)"
+            echo "  - PROJ-101--Add-Login (description must be lowercase)"
+            echo "  - PROJ-101--add--login (no double dashes in description)"
+            exit 1
+          fi
+          
+          echo "Branch name format is valid!"
