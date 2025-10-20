@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Booking Confirmation</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            background-color: #ffffff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #4CAF50;
+        }
+        .header h1 {
+            color: #4CAF50;
+            margin: 0;
+            font-size: 28px;
+        }
+        .content {
+            padding: 20px 0;
+        }
+        .booking-details {
+            background-color: #f9f9f9;
+            padding: 20px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .detail-row:last-child {
+            border-bottom: none;
+        }
+        .detail-label {
+            font-weight: bold;
+            color: #555;
+        }
+        .detail-value {
+            color: #333;
+        }
+        .cta-button {
+            display: inline-block;
+            background-color: #4CAF50;
+            color: white;
+            padding: 15px 30px;
+            text-decoration: none;
+            border-radius: 5px;
+            margin: 20px 0;
+            font-weight: bold;
+            text-align: center;
+        }
+        .cta-button:hover {
+            background-color: #45a049;
+        }
+        .footer {
+            text-align: center;
+            padding-top: 20px;
+            border-top: 1px solid #e0e0e0;
+            margin-top: 30px;
+            color: #777;
+            font-size: 14px;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            background-color: #FFA500;
+            color: white;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        .warning {
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        @media only screen and (max-width: 600px) {
+            body {
+                padding: 10px;
+            }
+            .container {
+                padding: 15px;
+            }
+            .detail-row {
+                flex-direction: column;
+            }
+            .detail-label {
+                margin-bottom: 5px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Bookora</h1>
+            <p style="margin: 10px 0 0 0; color: #666;">Your booking has been created!</p>
+        </div>
+
+        <div class="content">
+            <p>Hello <span th:text="${booking.customerName}">Customer</span>,</p>
+
+            <p>Thank you for choosing Bookora! Your booking has been successfully created.</p>
+
+            <div class="warning">
+                <strong>⚠️ Action Required:</strong> Click the button below to access and manage your booking.
+            </div>
+
+            <div style="text-align: center;">
+                <a th:href="${frontendUrl + '/bookings/' + booking.accessToken}" class="cta-button">
+                    Manage Booking
+                </a>
+            </div>
+
+            <div class="booking-details">
+                <h3 style="margin-top: 0; color: #4CAF50;">📋 Booking Information</h3>
+
+                <div class="detail-row">
+                    <span class="detail-label">Booking Number:</span>
+                    <span class="detail-value" th:text="${booking.id}">12345</span>
+                </div>
+
+                <div class="detail-row" th:if="${booking.service != null}">
+                    <span class="detail-label">Service:</span>
+                    <span class="detail-value" th:text="${booking.service.name}">Haircut Service</span>
+                </div>
+
+                <div class="detail-row" th:if="${booking.service != null and booking.service.description != null}">
+                    <span class="detail-label">Description:</span>
+                    <span class="detail-value" th:text="${booking.service.description}">Professional haircut service</span>
+                </div>
+
+                <div class="detail-row">
+                    <span class="detail-label">Date:</span>
+                    <span class="detail-value" th:text="${#temporals.format(booking.startTime, 'EEEE, MMMM dd, yyyy')}">Friday, October 25, 2025</span>
+                </div>
+
+                <div class="detail-row">
+                    <span class="detail-label">Time:</span>
+                    <span class="detail-value">
+                        <span th:text="${#temporals.format(booking.startTime, 'HH:mm')}">14:00</span> -
+                        <span th:text="${#temporals.format(booking.endTime, 'HH:mm')}">16:00</span>
+                    </span>
+                </div>
+
+                <div class="detail-row">
+                    <span class="detail-label">Customer Name:</span>
+                    <span class="detail-value" th:text="${booking.customerName}">John Doe</span>
+                </div>
+
+                <div class="detail-row">
+                    <span class="detail-label">Email:</span>
+                    <span class="detail-value" th:text="${booking.customerEmail}">john.doe@example.com</span>
+                </div>
+
+                <div class="detail-row" th:if="${booking.customerPhone != null}">
+                    <span class="detail-label">Phone:</span>
+                    <span class="detail-value" th:text="${booking.customerPhone}">010-1234-5678</span>
+                </div>
+
+                <div class="detail-row" th:if="${booking.notes != null and !booking.notes.isEmpty()}">
+                    <span class="detail-label">Special Requests:</span>
+                    <span class="detail-value" th:text="${booking.notes}">Please bring portfolio</span>
+                </div>
+            </div>
+
+            <p style="margin-top: 20px;">
+                <strong>💡 What to know:</strong>
+            </p>
+            <ul style="color: #666;">
+                <li>Click "Manage Booking" above to view your booking details</li>
+                <li>You can cancel your booking up to 24 hours before your appointment</li>
+                <li>Save your booking link for easy access anytime</li>
+                <li>You'll receive email notification if you cancel your booking</li>
+            </ul>
+
+
+            <p style="margin-top: 10px; color: #999; font-size: 12px;">
+                The "manage booking" expires on <span th:text="${#temporals.format(booking.tokenExpiresAt, 'MMMM dd, yyyy')}">expiry date</span>
+            </p>
+        </div>
+
+        <div class="footer">
+            <p>If you have any questions, please contact us.</p>
+            <p style="margin-top: 10px; font-size: 12px; color: #999;">
+                This is an automated email from Bookora. Please do not reply to this email.
+            </p>
+        </div>
+    </div>
+</body>
+</html>

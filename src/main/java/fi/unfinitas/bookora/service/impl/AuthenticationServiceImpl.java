@@ -43,11 +43,11 @@ public class AuthenticationServiceImpl implements AuthenticationService {
      */
     @Override
     public UserPublicInfo register(final RegisterRequest request) {
-        log.info("Attempting to register user with email: {}", request.getEmail());
+        log.debug("Attempting to register new user");
 
         final User savedUser = userService.createUser(request);
 
-        log.info("User registered successfully with ID: {}", savedUser.getId());
+        log.debug("User registered successfully with ID: {}", savedUser.getId());
 
         return userMapper.toUserResponse(savedUser);
     }
@@ -60,18 +60,18 @@ public class AuthenticationServiceImpl implements AuthenticationService {
      */
     @Override
     public LoginResponse login(final LoginRequest request) {
-        log.info("Attempting to authenticate user with username: {}", request.username());
+        log.debug("Attempting to authenticate user");
 
         try {
             final UserDetails userDetails = authenticateUser(request);
             final User user = userService.findByUsername(userDetails.getUsername());
 
-            log.info("User authenticated successfully: {}", user.getUsername());
+            log.debug("User authenticated successfully with ID: {}", user.getId());
 
             return buildLoginResponse(user, userDetails);
 
         } catch (final BadCredentialsException e) {
-            log.warn("Authentication failed for username: {}", request.username());
+            log.warn("Authentication failed");
             throw new InvalidCredentialsException("Invalid username or password");
         }
     }
@@ -84,7 +84,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
      */
     @Override
     public LoginResponse refreshToken(final String refreshToken) {
-        log.info("Attempting to refresh token");
+        log.debug("Attempting to refresh token");
 
         final String username = jwtUtil.extractUsername(refreshToken);
         final UserDetails userDetails = userDetailsService.loadUserByUsername(username);
@@ -93,7 +93,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
         final User user = userService.findByUsername(username);
 
-        log.info("Token refreshed successfully for user: {}", username);
+        log.debug("Token refreshed successfully for user ID: {}", user.getId());
 
         return buildLoginResponse(user, userDetails);
     }
@@ -116,7 +116,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
      */
     private void validateRefreshToken(final String refreshToken, final UserDetails userDetails, final String username) {
         if (!jwtUtil.validateToken(refreshToken, userDetails)) {
-            log.warn("Invalid refresh token for user: {}", username);
+            log.warn("Invalid refresh token");
             throw new InvalidCredentialsException("Invalid refresh token");
         }
     }
