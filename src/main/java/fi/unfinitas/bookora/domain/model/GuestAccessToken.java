@@ -36,9 +36,9 @@ public class GuestAccessToken extends BaseEntity {
     @Column(name = "expires_at", nullable = false)
     private LocalDateTime expiresAt;
 
-    @Column(name = "used_at")
+    @Column(name = "confirmed_at")
     @Builder.Default
-    private LocalDateTime usedAt = null;
+    private LocalDateTime confirmedAt = null;
 
     /**
      * Check if the token is expired.
@@ -50,17 +50,21 @@ public class GuestAccessToken extends BaseEntity {
     }
 
     /**
-     * Check if the token is valid (not used and not expired).
+     * Check if the token is valid (not expired).
+     * Note: confirmedAt does not affect validity - tokens can be reused.
      *
-     * @return true if the token is valid
+     * @return true if the token has not expired
      */
     public boolean isValid() {
-        return usedAt == null && !isExpired();}
+        return !isExpired();
+    }
 
     /**
-     * Mark the token as used by setting the usedAt timestamp.
+     * Mark the token as confirmed by setting the confirmedAt timestamp.
+     * This is used for tracking when the guest first accessed their booking.
+     * Does not prevent token reuse.
      */
-    public void markAsUsed() {
-        this.usedAt = LocalDateTime.now();
+    public void markAsConfirmed() {
+        this.confirmedAt = LocalDateTime.now();
     }
 }

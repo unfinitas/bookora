@@ -162,4 +162,123 @@ class GlobalExceptionHandlerTest {
         assertThat(response.getBody().getMessage()).contains("Authorization");
         assertThat(response.getBody().getMessage()).contains("missing");
     }
+
+    @Test
+    @DisplayName("Should handle booking not found exception")
+    void shouldHandleBookingNotFoundException() {
+        final BookingNotFoundException ex = new BookingNotFoundException("Booking not found");
+
+        final ResponseEntity<ApiResponse<Void>> response = globalExceptionHandler.handleBookingNotFound(ex);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getStatus()).isEqualTo("FAIL");
+        assertThat(response.getBody().getMessage()).isEqualTo("Booking not found");
+    }
+
+    @Test
+    @DisplayName("Should handle service not found exception")
+    void shouldHandleServiceNotFoundException() {
+        final ServiceNotFoundException ex = new ServiceNotFoundException("Service not found");
+
+        final ResponseEntity<ApiResponse<Void>> response = globalExceptionHandler.handleServiceNotFound(ex);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getStatus()).isEqualTo("FAIL");
+        assertThat(response.getBody().getMessage()).isEqualTo("Service not found");
+    }
+
+    @Test
+    @DisplayName("Should handle invalid booking time exception")
+    void shouldHandleInvalidBookingTimeException() {
+        final InvalidBookingTimeException ex = new InvalidBookingTimeException("Invalid booking time");
+
+        final ResponseEntity<ApiResponse<Void>> response = globalExceptionHandler.handleInvalidBookingTime(ex);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getStatus()).isEqualTo("FAIL");
+        assertThat(response.getBody().getMessage()).isEqualTo("Invalid booking time");
+    }
+
+    @Test
+    @DisplayName("Should handle token expired exception")
+    void shouldHandleTokenExpiredException() {
+        final TokenExpiredException ex = new TokenExpiredException("Token has expired");
+
+        final ResponseEntity<ApiResponse<Void>> response = globalExceptionHandler.handleTokenExpired(ex);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getStatus()).isEqualTo("FAIL");
+        assertThat(response.getBody().getMessage()).isEqualTo("Token has expired");
+    }
+
+    @Test
+    @DisplayName("Should handle token already used exception")
+    void shouldHandleTokenAlreadyUsedException() {
+        final TokenAlreadyUsedException ex = new TokenAlreadyUsedException("Token already used");
+
+        final ResponseEntity<ApiResponse<Void>> response = globalExceptionHandler.handleTokenAlreadyUsed(ex);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getStatus()).isEqualTo("FAIL");
+        assertThat(response.getBody().getMessage()).isEqualTo("Token already used");
+    }
+
+    @Test
+    @DisplayName("Should handle guest email already registered exception")
+    void shouldHandleGuestEmailAlreadyRegisteredException() {
+        final GuestEmailAlreadyRegisteredException ex = new GuestEmailAlreadyRegisteredException(
+                "Email already registered"
+        );
+
+        final ResponseEntity<ApiResponse<Void>> response = globalExceptionHandler.handleGuestEmailAlreadyRegistered(ex);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getStatus()).isEqualTo("FAIL");
+        assertThat(response.getBody().getMessage()).isEqualTo("Email already registered");
+    }
+
+    @Test
+    @DisplayName("Should handle booking already confirmed exception")
+    void shouldHandleBookingAlreadyConfirmedException() {
+        final BookingAlreadyConfirmedException ex = new BookingAlreadyConfirmedException("Booking is already confirmed");
+
+        final ResponseEntity<ApiResponse<Void>> response = globalExceptionHandler.handleBookingAlreadyConfirmed(ex);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getStatus()).isEqualTo("FAIL");
+        assertThat(response.getBody().getMessage()).isEqualTo("Booking is already confirmed");
+    }
+
+    @Test
+    @DisplayName("Should handle booking already cancelled exception")
+    void shouldHandleBookingAlreadyCancelledException() {
+        final BookingAlreadyCancelledException ex = new BookingAlreadyCancelledException("Booking is already cancelled");
+
+        final ResponseEntity<ApiResponse<Void>> response = globalExceptionHandler.handleBookingAlreadyCancelled(ex);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getStatus()).isEqualTo("FAIL");
+        assertThat(response.getBody().getMessage()).isEqualTo("Booking is already cancelled");
+    }
+
+    @Test
+    @DisplayName("Should handle cannot cancel booking exception")
+    void shouldHandleCannotCancelBookingException() {
+        final CannotCancelBookingException ex = new CannotCancelBookingException("Cannot cancel booking within 24 hours");
+
+        final ResponseEntity<ApiResponse<Void>> response = globalExceptionHandler.handleCannotCancelBooking(ex);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getStatus()).isEqualTo("FAIL");
+        assertThat(response.getBody().getMessage()).isEqualTo("Cannot cancel booking within 24 hours");
+    }
 }

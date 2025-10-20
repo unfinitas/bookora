@@ -8,6 +8,7 @@ import fi.unfinitas.bookora.dto.response.LoginResponse;
 import fi.unfinitas.bookora.dto.response.UserPublicInfo;
 import fi.unfinitas.bookora.exception.EmailAlreadyExistsException;
 import fi.unfinitas.bookora.exception.InvalidCredentialsException;
+import fi.unfinitas.bookora.exception.UserNotFoundException;
 import fi.unfinitas.bookora.exception.UsernameAlreadyExistsException;
 import fi.unfinitas.bookora.mapper.UserMapper;
 import fi.unfinitas.bookora.security.JwtUtil;
@@ -193,10 +194,10 @@ class AuthenticationServiceTest {
         when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
                 .thenReturn(authentication);
         when(userService.findByUsername("testuser"))
-                .thenThrow(new fi.unfinitas.bookora.exception.UserNotFoundException("User not found with username: testuser"));
+                .thenThrow(new UserNotFoundException("User not found with username: testuser"));
 
         assertThatThrownBy(() -> authenticationService.login(loginRequest))
-                .isInstanceOf(fi.unfinitas.bookora.exception.UserNotFoundException.class)
+                .isInstanceOf(UserNotFoundException.class)
                 .hasMessageContaining("User not found");
 
         verify(authenticationManager).authenticate(any(UsernamePasswordAuthenticationToken.class));
@@ -252,10 +253,10 @@ class AuthenticationServiceTest {
         when(userDetailsService.loadUserByUsername("testuser")).thenReturn(userDetails);
         when(jwtUtil.validateToken(refreshToken, userDetails)).thenReturn(true);
         when(userService.findByUsername("testuser"))
-                .thenThrow(new fi.unfinitas.bookora.exception.UserNotFoundException("User not found with username: testuser"));
+                .thenThrow(new UserNotFoundException("User not found with username: testuser"));
 
         assertThatThrownBy(() -> authenticationService.refreshToken(refreshToken))
-                .isInstanceOf(fi.unfinitas.bookora.exception.UserNotFoundException.class)
+                .isInstanceOf(UserNotFoundException.class)
                 .hasMessageContaining("User not found");
 
         verify(userService).findByUsername("testuser");

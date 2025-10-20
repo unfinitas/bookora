@@ -39,7 +39,7 @@ public class UserService {
      */
     @Transactional
     public User createUser(final RegisterRequest request) {
-        log.info("Creating new user with username: {}", request.getUsername());
+        log.debug("Creating new user");
 
         validateEmailNotExists(request.getEmail());
         validateUsernameNotExists(request.getUsername());
@@ -49,7 +49,7 @@ public class UserService {
 
         final User savedUser = userRepository.save(user);
 
-        log.info("User created successfully with ID: {}", savedUser.getId());
+        log.debug("User created successfully with ID: {}", savedUser.getId());
         return savedUser;
     }
 
@@ -62,10 +62,10 @@ public class UserService {
      */
     @Transactional(readOnly = true)
     public User findByUsername(final String username) {
-        log.debug("Finding user by username: {}", username);
+        log.debug("Finding user by username");
         return userRepository.findByUsername(username)
                 .orElseThrow(() -> {
-                    log.warn("User not found with username: {}", username);
+                    log.warn("User not found");
                     return new UserNotFoundException("User not found with username: " + username);
                 });
     }
@@ -79,10 +79,10 @@ public class UserService {
      */
     @Transactional(readOnly = true)
     public User findByEmail(final String email) {
-        log.debug("Finding user by email: {}", email);
+        log.debug("Finding user by email");
         return userRepository.findByEmail(email)
                 .orElseThrow(() -> {
-                    log.warn("User not found with email: {}", email);
+                    log.warn("User not found");
                     return new UserNotFoundException("User not found with email: " + email);
                 });
     }
@@ -112,7 +112,7 @@ public class UserService {
      */
     private void validateEmailNotExists(final String email) {
         if (userRepository.existsByEmail(email)) {
-            log.warn("Email already exists: {}", email);
+            log.warn("Email already exists");
             throw new EmailAlreadyExistsException("Email is already registered: " + email);
         }
     }
@@ -125,7 +125,7 @@ public class UserService {
      */
     private void validateUsernameNotExists(final String username) {
         if (userRepository.existsByUsername(username)) {
-            log.warn("Username already exists: {}", username);
+            log.warn("Username already exists");
             throw new UsernameAlreadyExistsException("Username is already taken: " + username);
         }
     }

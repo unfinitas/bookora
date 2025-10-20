@@ -56,8 +56,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
-    // ==================== Private Helper Methods ====================
-
     /**
      * Extract JWT token from Authorization header.
      */
