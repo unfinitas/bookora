@@ -53,13 +53,6 @@ public class UserService {
         return savedUser;
     }
 
-    /**
-     * Find user by username.
-     *
-     * @param username the username to search for
-     * @return the user
-     * @throws UserNotFoundException if user not found
-     */
     @Transactional(readOnly = true)
     public User findByUsername(final String username) {
         log.debug("Finding user by username");
@@ -70,13 +63,6 @@ public class UserService {
                 });
     }
 
-    /**
-     * Find user by email.
-     *
-     * @param email the email to search for
-     * @return the user
-     * @throws UserNotFoundException if user not found
-     */
     @Transactional(readOnly = true)
     public User findByEmail(final String email) {
         log.debug("Finding user by email");
@@ -87,13 +73,6 @@ public class UserService {
                 });
     }
 
-    /**
-     * Find user by ID.
-     *
-     * @param id the user ID
-     * @return the user
-     * @throws UserNotFoundException if user not found
-     */
     @Transactional(readOnly = true)
     public User findById(final UUID id) {
         log.debug("Finding user by ID: {}", id);
@@ -102,6 +81,20 @@ public class UserService {
                     log.warn("User not found with ID: {}", id);
                     return new UserNotFoundException("User not found with ID: " + id);
                 });
+    }
+
+
+    /**
+     * Update the last verification email sent timestamp for a user.
+     *
+     * @param userId the user ID
+     */
+    @Transactional
+    public void updateLastVerificationEmailSentAt(final UUID userId) {
+        log.debug("Updating last verification email sent timestamp for user ID: {}", userId);
+        final User user = findById(userId);
+        user.setLastVerificationEmailSentAt(java.time.LocalDateTime.now());
+        userRepository.save(user);
     }
 
     /**

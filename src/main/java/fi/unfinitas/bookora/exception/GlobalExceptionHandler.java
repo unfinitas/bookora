@@ -273,4 +273,44 @@ public class GlobalExceptionHandler {
         );
         return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
     }
+
+    /**
+     * Handle user not found exception.
+     */
+    @ExceptionHandler(UserNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleUserNotFound(final UserNotFoundException ex) {
+        log.debug("User not found: {}", ex.getMessage());
+        final ApiResponse<Void> response = ApiResponse.fail(ex.getMessage());
+        return new ResponseEntity<>(response, HttpStatus.NOT_FOUND);
+    }
+
+    /**
+     * Handle rate limit exceeded exception.
+     */
+    @ExceptionHandler(RateLimitExceededException.class)
+    public ResponseEntity<ApiResponse<Void>> handleRateLimitExceeded(final RateLimitExceededException ex) {
+        log.warn("Rate limit exceeded: {}", ex.getMessage());
+        final ApiResponse<Void> response = ApiResponse.fail(ex.getMessage());
+        return new ResponseEntity<>(response, HttpStatus.TOO_MANY_REQUESTS);
+    }
+
+    /**
+     * Handle verification token invalid exception.
+     */
+    @ExceptionHandler(VerificationTokenInvalidException.class)
+    public ResponseEntity<ApiResponse<Void>> handleVerificationTokenInvalid(final VerificationTokenInvalidException ex) {
+        log.debug("Invalid verification token: {}", ex.getMessage());
+        final ApiResponse<Void> response = ApiResponse.fail(ex.getMessage());
+        return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+    }
+
+    /**
+     * Handle verification token expired exception.
+     */
+    @ExceptionHandler(VerificationTokenExpiredException.class)
+    public ResponseEntity<ApiResponse<Void>> handleVerificationTokenExpired(final VerificationTokenExpiredException ex) {
+        log.debug("Verification token expired: {}", ex.getMessage());
+        final ApiResponse<Void> response = ApiResponse.fail(ex.getMessage());
+        return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+    }
 }
