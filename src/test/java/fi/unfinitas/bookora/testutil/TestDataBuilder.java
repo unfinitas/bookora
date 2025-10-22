@@ -44,7 +44,8 @@ public class TestDataBuilder {
             .email("test@example.com")
             .password("password123")  // Required for registered users
             .role(UserRole.USER)
-            .isGuest(false);
+            .isGuest(false)
+            .isEmailVerified(true);
     }
 
     public static User.UserBuilder guestUser() {
@@ -55,7 +56,8 @@ public class TestDataBuilder {
             .email("guest@example.com")
             .password(null)  // Guest users don't have passwords
             .role(UserRole.USER)
-            .isGuest(true);
+            .isGuest(true)
+            .isEmailVerified(true);
     }
 
     public static Booking.BookingBuilder booking() {

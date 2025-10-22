@@ -14,27 +14,12 @@ import org.mapstruct.MappingConstants;
 @Mapper(componentModel = MappingConstants.ComponentModel.SPRING, uses = ServiceMapper.class)
 public interface BookingMapper {
 
-    /**
-     * Convert Booking entity to BookingResponse DTO.
-     * Maps customer information and service details.
-     *
-     * @param booking the booking entity
-     * @return BookingResponse DTO
-     */
     @Mapping(target = "customerName", expression = "java(booking.getCustomer().getFirstName() + \" \" + booking.getCustomer().getLastName())")
     @Mapping(source = "customer.email", target = "customerEmail")
     @Mapping(source = "customer.phoneNumber", target = "customerPhone")
     @Mapping(target = "status", expression = "java(booking.getStatus().name())")
     BookingResponse toResponse(Booking booking);
 
-    /**
-     * Convert Booking entity and GuestAccessToken to GuestBookingResponse DTO.
-     * Includes all booking information plus access token details.
-     *
-     * @param booking the booking entity
-     * @param token   the guest access token
-     * @return GuestBookingResponse DTO
-     */
     @Mapping(target = "customerName", expression = "java(booking.getCustomer().getFirstName() + \" \" + booking.getCustomer().getLastName())")
     @Mapping(source = "booking.customer.email", target = "customerEmail")
     @Mapping(source = "booking.customer.phoneNumber", target = "customerPhone")

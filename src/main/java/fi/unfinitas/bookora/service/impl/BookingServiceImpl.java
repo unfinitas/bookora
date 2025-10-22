@@ -65,13 +65,7 @@ public class BookingServiceImpl implements BookingService {
                 request.getEndTime()
         );
 
-        if (hasOverlap) {
-            log.warn("Overlapping booking detected for provider {} at time range {} - {}",
-                    providerId, request.getStartTime(), request.getEndTime());
-            throw new InvalidBookingTimeException(
-                    "The selected time slot is already booked. Please choose another time."
-            );
-        }
+        hasOverlap(request, hasOverlap, providerId);
 
         final User guestUser = guestUserService.findOrCreateGuestUser(
                 request.getEmail(),
@@ -122,6 +116,16 @@ public class BookingServiceImpl implements BookingService {
         }
     }
 
+    private static void hasOverlap(CreateGuestBookingRequest request, boolean hasOverlap, UUID providerId) {
+        if (hasOverlap) {
+            log.warn("Overlapping booking detected for provider {} at time range {} - {}",
+                    providerId, request.getStartTime(), request.getEndTime());
+            throw new InvalidBookingTimeException(
+                    "The selected time slot is already booked. Please choose another time."
+            );
+        }
+    }
+
     @Override
     @Transactional
     public BookingResponse confirmBookingByToken(final UUID token) {
@@ -151,7 +155,6 @@ public class BookingServiceImpl implements BookingService {
 
         validateStatus(booking);
 
-        // Check if cancellation is within 24 hours of booking start time
         final LocalDateTime now = LocalDateTime.now();
         final LocalDateTime cancellationDeadline = booking.getStartTime().minusHours(24);
 
@@ -166,7 +169,6 @@ public class BookingServiceImpl implements BookingService {
 
         log.debug("Booking cancelled successfully. ID: {}", updatedBooking.getId());
 
-        // Publish SendMailEvent for booking cancellation email
         try {
             final BookingResponse response = bookingMapper.toResponse(updatedBooking);
             final Map<String, Object> templateVariables = new HashMap<>();
@@ -194,13 +196,11 @@ public class BookingServiceImpl implements BookingService {
     public BookingResponse validateAndConfirmBooking(final UUID token) {
         log.debug("Validating token and auto-confirming booking if pending");
 
-        // Validate token exists and not expired
         final GuestAccessToken accessToken = tokenService.validateToken(token);
         final Booking booking = accessToken.getBooking();
 
         log.debug("Token validated. Booking ID: {}, Status: {}", booking.getId(), booking.getStatus());
 
-        // Auto-confirm only if status is PENDING
         if (booking.getStatus() == BookingStatus.PENDING) {
             log.debug("Booking is PENDING. Auto-confirming to CONFIRMED");
             booking.setStatus(BookingStatus.CONFIRMED);
