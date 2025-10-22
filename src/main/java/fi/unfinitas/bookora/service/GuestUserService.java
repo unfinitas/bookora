@@ -46,7 +46,6 @@ public class GuestUserService {
         if (existingUser.isPresent()) {
             final User user = existingUser.get();
 
-            // If email belongs to a registered user, throw exception
             if (!user.getIsGuest()) {
                 log.warn("Email belongs to a registered user. Guest booking not allowed.");
                 throw new GuestEmailAlreadyRegisteredException(
@@ -87,8 +86,9 @@ public class GuestUserService {
                 .email(email)
                 .phoneNumber(phoneNumber)
                 .isGuest(true)
-                .password(null) // Guest users have no password
+                .password(null)
                 .role(UserRole.USER)
+                .isEmailVerified(true) // guest doesn't need to verify an email through this.
                 .build();
     }
 }

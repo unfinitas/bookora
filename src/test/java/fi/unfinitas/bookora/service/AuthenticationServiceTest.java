@@ -1,6 +1,8 @@
 package fi.unfinitas.bookora.service;
 
+import fi.unfinitas.bookora.config.BookoraProperties;
 import fi.unfinitas.bookora.domain.enums.UserRole;
+import fi.unfinitas.bookora.domain.model.EmailVerificationToken;
 import fi.unfinitas.bookora.domain.model.User;
 import fi.unfinitas.bookora.dto.request.LoginRequest;
 import fi.unfinitas.bookora.dto.request.RegisterRequest;
@@ -20,6 +22,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -28,6 +31,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 
+import java.time.LocalDateTime;
 import java.util.Set;
 import java.util.UUID;
 
@@ -35,6 +39,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.lenient;
 import static org.springframework.security.core.userdetails.User.builder;
 
 /**
@@ -57,6 +62,21 @@ class AuthenticationServiceTest {
 
     @Mock
     private UserMapper userMapper;
+
+    @Mock
+    private EmailVerificationService emailVerificationService;
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+
+    @Mock
+    private BookoraProperties bookoraProperties;
+
+    @Mock
+    private BookoraProperties.Verification verification;
+
+    @Mock
+    private BookoraProperties.Verification.Token tokenConfig;
 
     @InjectMocks
     private AuthenticationServiceImpl authenticationService;
@@ -87,6 +107,7 @@ class AuthenticationServiceTest {
                 .password("encodedPassword")
                 .role(UserRole.USER)
                 .isGuest(false)
+                .isEmailVerified(false)
                 .build();
 
         userDetails = builder()
@@ -94,12 +115,27 @@ class AuthenticationServiceTest {
                 .password("encodedPassword")
                 .authorities(Set.of(new SimpleGrantedAuthority("ROLE_USER")))
                 .build();
+
+        // Setup nested property mocking for BookoraProperties with lenient() since not all tests use all mocks
+        lenient().when(bookoraProperties.getVerification()).thenReturn(verification);
+        lenient().when(verification.getToken()).thenReturn(tokenConfig);
+        lenient().when(tokenConfig.getExpirationDays()).thenReturn(7);
+        lenient().when(bookoraProperties.getFrontendUrl()).thenReturn("http://localhost:3000");
     }
 
     @Test
     @DisplayName("Should successfully register new user")
     void shouldSuccessfullyRegisterNewUser() {
+        final EmailVerificationToken token = EmailVerificationToken.builder()
+                .userId(testUser.getId())
+                .token(UUID.randomUUID())
+                .expiresAt(LocalDateTime.now().plusDays(7))
+                .build();
+
         when(userService.createUser(registerRequest)).thenReturn(testUser);
+        when(emailVerificationService.generateVerificationToken(testUser)).thenReturn(token);
+        doNothing().when(userService).updateLastVerificationEmailSentAt(testUser.getId());
+        doNothing().when(eventPublisher).publishEvent(any());
 
         final UserPublicInfo userPublicInfo = UserPublicInfo.builder()
                 .id(testUser.getId())
@@ -115,6 +151,9 @@ class AuthenticationServiceTest {
         assertThat(result.getRole()).isEqualTo("USER");
 
         verify(userService).createUser(registerRequest);
+        verify(emailVerificationService).generateVerificationToken(testUser);
+        verify(userService).updateLastVerificationEmailSentAt(testUser.getId());
+        verify(eventPublisher).publishEvent(any(fi.unfinitas.bookora.domain.event.SendMailEvent.class));
         verify(userMapper).toUserResponse(testUser);
     }
 
@@ -260,5 +299,83 @@ class AuthenticationServiceTest {
                 .hasMessageContaining("User not found");
 
         verify(userService).findByUsername("testuser");
+    }
+
+    @Test
+    @DisplayName("Should generate verification token when registering")
+    void shouldGenerateVerificationTokenWhenRegistering() {
+        final EmailVerificationToken token = EmailVerificationToken.builder()
+                .userId(testUser.getId())
+                .token(UUID.randomUUID())
+                .expiresAt(LocalDateTime.now().plusDays(7))
+                .build();
+
+        when(userService.createUser(registerRequest)).thenReturn(testUser);
+        when(emailVerificationService.generateVerificationToken(testUser)).thenReturn(token);
+        doNothing().when(userService).updateLastVerificationEmailSentAt(testUser.getId());
+        doNothing().when(eventPublisher).publishEvent(any());
+
+        final UserPublicInfo userPublicInfo = UserPublicInfo.builder()
+                .id(testUser.getId())
+                .username(testUser.getUsername())
+                .role(testUser.getRole().name())
+                .build();
+        when(userMapper.toUserResponse(testUser)).thenReturn(userPublicInfo);
+
+        authenticationService.register(registerRequest);
+
+        verify(emailVerificationService).generateVerificationToken(testUser);
+    }
+
+    @Test
+    @DisplayName("Should send verification email when registering")
+    void shouldSendVerificationEmailWhenRegistering() {
+        final EmailVerificationToken token = EmailVerificationToken.builder()
+                .userId(testUser.getId())
+                .token(UUID.randomUUID())
+                .expiresAt(LocalDateTime.now().plusDays(7))
+                .build();
+
+        when(userService.createUser(registerRequest)).thenReturn(testUser);
+        when(emailVerificationService.generateVerificationToken(testUser)).thenReturn(token);
+        doNothing().when(userService).updateLastVerificationEmailSentAt(testUser.getId());
+        doNothing().when(eventPublisher).publishEvent(any());
+
+        final UserPublicInfo userPublicInfo = UserPublicInfo.builder()
+                .id(testUser.getId())
+                .username(testUser.getUsername())
+                .role(testUser.getRole().name())
+                .build();
+        when(userMapper.toUserResponse(testUser)).thenReturn(userPublicInfo);
+
+        authenticationService.register(registerRequest);
+
+        verify(eventPublisher).publishEvent(any(fi.unfinitas.bookora.domain.event.SendMailEvent.class));
+    }
+
+    @Test
+    @DisplayName("Should update lastVerificationEmailSentAt when registering")
+    void shouldUpdateLastVerificationEmailSentAtWhenRegistering() {
+        final EmailVerificationToken token = EmailVerificationToken.builder()
+                .userId(testUser.getId())
+                .token(UUID.randomUUID())
+                .expiresAt(LocalDateTime.now().plusDays(7))
+                .build();
+
+        when(userService.createUser(registerRequest)).thenReturn(testUser);
+        when(emailVerificationService.generateVerificationToken(testUser)).thenReturn(token);
+        doNothing().when(userService).updateLastVerificationEmailSentAt(testUser.getId());
+        doNothing().when(eventPublisher).publishEvent(any());
+
+        final UserPublicInfo userPublicInfo = UserPublicInfo.builder()
+                .id(testUser.getId())
+                .username(testUser.getUsername())
+                .role(testUser.getRole().name())
+                .build();
+        when(userMapper.toUserResponse(testUser)).thenReturn(userPublicInfo);
+
+        authenticationService.register(registerRequest);
+
+        verify(userService).updateLastVerificationEmailSentAt(testUser.getId());
     }
 }

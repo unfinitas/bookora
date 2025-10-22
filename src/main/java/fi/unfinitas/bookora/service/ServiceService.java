@@ -18,13 +18,6 @@ public class ServiceService {
 
     private final ServiceRepository serviceRepository;
 
-    /**
-     * Get service by ID.
-     *
-     * @param serviceId the service ID
-     * @return the service entity
-     * @throws ServiceNotFoundException if service not found
-     */
     @Transactional(readOnly = true)
     public Service getServiceById(final Long serviceId) {
         log.debug("Retrieving service with ID: {}", serviceId);
