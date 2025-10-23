@@ -14,6 +14,8 @@ Modern booking system for personal services
 - **Lombok** - Boilerplate code reduction
 - **Hypersistence Utils** - Hibernate utilities
 - **JWT (JJWT)** - Token-based authentication
+- **Resilience4j** - Rate limiting for email verification
+- **Thymeleaf** - Email template engine
 - **Springdoc OpenAPI** - API documentation
 - **Maven** - Build tool
 
@@ -29,6 +31,7 @@ Modern booking system for personal services
 erDiagram
     t_user ||--o| t_provider : "has"
     t_user ||--o{ t_booking : "makes"
+    t_user ||--o{ t_email_verification_token : "has"
     t_provider ||--o{ t_service : "offers"
     t_provider ||--o{ t_booking : "receives"
     t_provider ||--o{ t_availability : "has"
@@ -45,7 +48,19 @@ erDiagram
         string password
         string role "GUEST, CUSTOMER, PROVIDER"
         boolean is_guest
+        boolean is_email_verified
+        timestamp last_verification_email_sent_at
         string phone_number
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    t_email_verification_token {
+        bigint id PK
+        uuid user_id FK
+        uuid token UK "uq_email_verification_token_token"
+        timestamp expires_at
+        timestamp used_at
         timestamp created_at
         timestamp updated_at
     }
@@ -113,7 +128,7 @@ erDiagram
         bigint booking_id FK,UK "uq_guest_access_token_booking_id"
         uuid token UK "uq_guest_access_token_token"
         timestamp expires_at
-        timestamp used_at
+        timestamp confirmed_at
         timestamp created_at
         timestamp updated_at
     }
@@ -123,6 +138,7 @@ erDiagram
 
 - **User-Provider**: One-to-one relationship. A user can become a provider.
 - **User-Booking**: One-to-many. A customer (user) can make multiple bookings.
+- **User-EmailVerificationToken**: One-to-many. A user can have multiple verification tokens (historical).
 - **Provider-Service**: One-to-many. A provider offers multiple services.
 - **Provider-Booking**: One-to-many. A provider receives multiple bookings.
 - **Provider-Availability**: One-to-many. A provider defines multiple availability time.
@@ -136,6 +152,11 @@ erDiagram
   - Multiple providers can share the same address (co-working spaces, business centers)
   - Enables address history tracking via BaseEntity timestamps
   - Supports efficient location-based queries with indexed city/country columns
+- **Email Verification**: Required for user login
+  - Verification tokens expire after 7 days (configurable)
+  - Resend endpoint is rate-limited to 1 request per hour
+  - Guest users (booking-only) bypass email verification
+  - Tokens are single-use (marked with `used_at` timestamp)
 - **UserRole**: Enum (GUEST, CUSTOMER, PROVIDER)
 - **BookingStatus**: Enum (PENDING, CONFIRMED, CANCELLED, COMPLETED)
 - **Naming Conventions**:

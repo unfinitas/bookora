@@ -6,9 +6,6 @@ import lombok.*;
 
 import java.time.LocalDateTime;
 
-/**
- * Booking entity representing service bookings made by customers.
- */
 @Entity
 @Table(name = "t_booking")
 @Getter
