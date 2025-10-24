@@ -14,28 +14,27 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.assertj.MockMvcTester;
 
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 
 @WebMvcTest(AuthController.class)
-@AutoConfigureMockMvc
+@AutoConfigureMockMvc(addFilters = false)
 class AuthControllerTest {
 
     @Autowired
-    private MockMvc mockMvc;
+    private MockMvcTester mockMvcTester;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -91,15 +90,15 @@ class AuthControllerTest {
     void shouldSuccessfullyRegisterNewUser() throws Exception {
         when(authenticationService.register(any(RegisterRequest.class))).thenReturn(userPublicInfo);
 
-        mockMvc.perform(post("/auth/register")
-                        .with(csrf())
+        assertThat(mockMvcTester.perform(post("/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(registerRequest)))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.status").value("SUCCESS"))
-                .andExpect(jsonPath("$.message").value("User registration successful"))
-                .andExpect(jsonPath("$.data.username").value("testuser"))
-                .andExpect(jsonPath("$.data.role").value("USER"));
+                        .content(objectMapper.writeValueAsString(registerRequest))))
+                .hasStatus(HttpStatus.CREATED)
+                .bodyJson()
+                .hasPathSatisfying("$.status", status -> assertThat(status).isEqualTo("SUCCESS"))
+                .hasPathSatisfying("$.message", message -> assertThat(message).isEqualTo("User registration successful"))
+                .hasPathSatisfying("$.data.username", username -> assertThat(username).isEqualTo("testuser"))
+                .hasPathSatisfying("$.data.role", role -> assertThat(role).isEqualTo("USER"));
 
         verify(authenticationService).register(any(RegisterRequest.class));
     }
@@ -116,11 +115,10 @@ class AuthControllerTest {
                 .password("weak")
                 .build();
 
-        mockMvc.perform(post("/auth/register")
-                        .with(csrf())
+        assertThat(mockMvcTester.perform(post("/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(invalidRequest)))
-                .andExpect(status().isBadRequest());
+                        .content(objectMapper.writeValueAsString(invalidRequest))))
+                .hasStatus(HttpStatus.BAD_REQUEST);
 
         verify(authenticationService, never()).register(any(RegisterRequest.class));
     }
@@ -136,11 +134,10 @@ class AuthControllerTest {
         when(authenticationService.register(any(RegisterRequest.class)))
                 .thenThrow(new EmailAlreadyExistsException("Email is already registered"));
 
-        mockMvc.perform(post("/auth/register")
-                        .with(csrf())
+        assertThat(mockMvcTester.perform(post("/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(registerRequest)))
-                .andExpect(status().isConflict());
+                        .content(objectMapper.writeValueAsString(registerRequest))))
+                .hasStatus(HttpStatus.CONFLICT);
 
         verify(authenticationService).register(any(RegisterRequest.class));
     }
@@ -151,18 +148,18 @@ class AuthControllerTest {
     void shouldSuccessfullyLoginUser() throws Exception {
         when(authenticationService.login(any(LoginRequest.class))).thenReturn(loginData);
 
-        mockMvc.perform(post("/auth/login")
-                        .with(csrf())
+        assertThat(mockMvcTester.perform(post("/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(loginRequest)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("SUCCESS"))
-                .andExpect(jsonPath("$.message").value("Login successful"))
-                .andExpect(jsonPath("$.data.username").value("testuser"))
-                .andExpect(jsonPath("$.data.accessToken").value("access-token"))
-                .andExpect(jsonPath("$.data.refreshToken").value("refresh-token"))
-                .andExpect(jsonPath("$.data.tokenType").value("Bearer"))
-                .andExpect(jsonPath("$.data.expiresIn").value(86400000));
+                        .content(objectMapper.writeValueAsString(loginRequest))))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying("$.status", status -> assertThat(status).isEqualTo("SUCCESS"))
+                .hasPathSatisfying("$.message", message -> assertThat(message).isEqualTo("Login successful"))
+                .hasPathSatisfying("$.data.username", username -> assertThat(username).isEqualTo("testuser"))
+                .hasPathSatisfying("$.data.accessToken", token -> assertThat(token).isEqualTo("access-token"))
+                .hasPathSatisfying("$.data.refreshToken", token -> assertThat(token).isEqualTo("refresh-token"))
+                .hasPathSatisfying("$.data.tokenType", type -> assertThat(type).isEqualTo("Bearer"))
+                .hasPathSatisfying("$.data.expiresIn", expiresIn -> assertThat(expiresIn).isEqualTo(86400000));
 
         verify(authenticationService).login(any(LoginRequest.class));
     }
@@ -173,11 +170,10 @@ class AuthControllerTest {
     void shouldReturn400WhenLoginRequestIsInvalid() throws Exception {
         final LoginRequest invalidRequest = new LoginRequest("", "");
 
-        mockMvc.perform(post("/auth/login")
-                        .with(csrf())
+        assertThat(mockMvcTester.perform(post("/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(invalidRequest)))
-                .andExpect(status().isBadRequest());
+                        .content(objectMapper.writeValueAsString(invalidRequest))))
+                .hasStatus(HttpStatus.BAD_REQUEST);
 
         verify(authenticationService, never()).login(any(LoginRequest.class));
     }
@@ -188,13 +184,13 @@ class AuthControllerTest {
     void shouldSuccessfullyRefreshToken() throws Exception {
         when(authenticationService.refreshToken(anyString())).thenReturn(loginData);
 
-        mockMvc.perform(post("/auth/refresh")
-                        .with(csrf())
-                        .header("Authorization", "Bearer valid-refresh-token"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("SUCCESS"))
-                .andExpect(jsonPath("$.data.accessToken").value("access-token"))
-                .andExpect(jsonPath("$.data.refreshToken").value("refresh-token"));
+        assertThat(mockMvcTester.perform(post("/auth/refresh")
+                        .header("Authorization", "Bearer valid-refresh-token")))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying("$.status", status -> assertThat(status).isEqualTo("SUCCESS"))
+                .hasPathSatisfying("$.data.accessToken", token -> assertThat(token).isEqualTo("access-token"))
+                .hasPathSatisfying("$.data.refreshToken", token -> assertThat(token).isEqualTo("refresh-token"));
 
         verify(authenticationService).refreshToken("valid-refresh-token");
     }
@@ -203,9 +199,8 @@ class AuthControllerTest {
     @DisplayName("Should return 401 when Authorization header is missing")
     @WithMockUser
     void shouldReturn401WhenAuthorizationHeaderIsMissing() throws Exception {
-        mockMvc.perform(post("/auth/refresh")
-                        .with(csrf()))
-                .andExpect(status().isBadRequest());
+        assertThat(mockMvcTester.perform(post("/auth/refresh")))
+                .hasStatus(HttpStatus.BAD_REQUEST);
 
         verify(authenticationService, never()).refreshToken(anyString());
     }
@@ -214,10 +209,9 @@ class AuthControllerTest {
     @DisplayName("Should return 401 when Authorization header does not start with Bearer")
     @WithMockUser
     void shouldReturn401WhenAuthorizationHeaderDoesNotStartWithBearer() throws Exception {
-        mockMvc.perform(post("/auth/refresh")
-                        .with(csrf())
-                        .header("Authorization", "Basic invalid-token"))
-                .andExpect(status().isUnauthorized());
+        assertThat(mockMvcTester.perform(post("/auth/refresh")
+                        .header("Authorization", "Basic invalid-token")))
+                .hasStatus(HttpStatus.UNAUTHORIZED);
 
         verify(authenticationService, never()).refreshToken(anyString());
     }

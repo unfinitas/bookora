@@ -113,7 +113,7 @@ erDiagram
         bigint booking_id FK,UK "uq_guest_access_token_booking_id"
         uuid token UK "uq_guest_access_token_token"
         timestamp expires_at
-        timestamp used_at
+        timestamp confirmed_at
         timestamp created_at
         timestamp updated_at
     }
