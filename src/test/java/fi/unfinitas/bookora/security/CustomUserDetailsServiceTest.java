@@ -43,6 +43,7 @@ class CustomUserDetailsServiceTest {
                 .password("encodedPassword123")
                 .role(UserRole.USER)
                 .isGuest(false)
+                .isEmailVerified(true)
                 .build();
     }
 
@@ -107,6 +108,7 @@ class CustomUserDetailsServiceTest {
                 .password("encodedPassword123")
                 .role(UserRole.PROVIDER)
                 .isGuest(false)
+                .isEmailVerified(true)
                 .build();
 
         when(userRepository.findByUsername("provider")).thenReturn(Optional.of(providerUser));

@@ -37,7 +37,6 @@ public class AuthController {
     @PostMapping("/register")
     @Operation(summary = "Register a new user", description = "Register a new user. Login separately to get tokens.")
     public ResponseEntity<ApiResponse<UserPublicInfo>> register(@Valid @RequestBody final RegisterRequest request) {
-        log.info("Registration request received for email: {}", request.getEmail());
         final UserPublicInfo data = authenticationService.register(request);
         final ApiResponse<UserPublicInfo> response = ApiResponse.success("User registration successful", data);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
@@ -52,7 +51,6 @@ public class AuthController {
     @PostMapping("/login")
     @Operation(summary = "Login", description = "Authenticate user and return tokens")
     public ResponseEntity<ApiResponse<LoginResponse>> login(@Valid @RequestBody final LoginRequest request) {
-        log.info("Login request received for username: {}", request.username());
         final LoginResponse data = authenticationService.login(request);
         final ApiResponse<LoginResponse> response = ApiResponse.success("Login successful", data);
         return ResponseEntity.ok(response);
@@ -68,7 +66,6 @@ public class AuthController {
     @Operation(summary = "Refresh token", description = "Refresh access token using refresh token")
     public ResponseEntity<ApiResponse<LoginResponse>> refreshToken(
             @RequestHeader("Authorization") final String authHeader) {
-        log.info("Token refresh request received");
 
         validateBearerToken(authHeader);
 

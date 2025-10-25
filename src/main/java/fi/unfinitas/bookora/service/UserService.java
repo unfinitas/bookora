@@ -39,7 +39,7 @@ public class UserService {
      */
     @Transactional
     public User createUser(final RegisterRequest request) {
-        log.info("Creating new user with username: {}", request.getUsername());
+        log.debug("Creating new user");
 
         validateEmailNotExists(request.getEmail());
         validateUsernameNotExists(request.getUsername());
@@ -49,51 +49,30 @@ public class UserService {
 
         final User savedUser = userRepository.save(user);
 
-        log.info("User created successfully with ID: {}", savedUser.getId());
+        log.debug("User created successfully with ID: {}", savedUser.getId());
         return savedUser;
     }
 
-    /**
-     * Find user by username.
-     *
-     * @param username the username to search for
-     * @return the user
-     * @throws UserNotFoundException if user not found
-     */
     @Transactional(readOnly = true)
     public User findByUsername(final String username) {
-        log.debug("Finding user by username: {}", username);
+        log.debug("Finding user by username");
         return userRepository.findByUsername(username)
                 .orElseThrow(() -> {
-                    log.warn("User not found with username: {}", username);
+                    log.warn("User not found");
                     return new UserNotFoundException("User not found with username: " + username);
                 });
     }
 
-    /**
-     * Find user by email.
-     *
-     * @param email the email to search for
-     * @return the user
-     * @throws UserNotFoundException if user not found
-     */
     @Transactional(readOnly = true)
     public User findByEmail(final String email) {
-        log.debug("Finding user by email: {}", email);
+        log.debug("Finding user by email");
         return userRepository.findByEmail(email)
                 .orElseThrow(() -> {
-                    log.warn("User not found with email: {}", email);
+                    log.warn("User not found");
                     return new UserNotFoundException("User not found with email: " + email);
                 });
     }
 
-    /**
-     * Find user by ID.
-     *
-     * @param id the user ID
-     * @return the user
-     * @throws UserNotFoundException if user not found
-     */
     @Transactional(readOnly = true)
     public User findById(final UUID id) {
         log.debug("Finding user by ID: {}", id);
@@ -104,6 +83,20 @@ public class UserService {
                 });
     }
 
+
+    /**
+     * Update the last verification email sent timestamp for a user.
+     *
+     * @param userId the user ID
+     */
+    @Transactional
+    public void updateLastVerificationEmailSentAt(final UUID userId) {
+        log.debug("Updating last verification email sent timestamp for user ID: {}", userId);
+        final User user = findById(userId);
+        user.setLastVerificationEmailSentAt(java.time.LocalDateTime.now());
+        userRepository.save(user);
+    }
+
     /**
      * Validate that email doesn't already exist.
      *
@@ -112,7 +105,7 @@ public class UserService {
      */
     private void validateEmailNotExists(final String email) {
         if (userRepository.existsByEmail(email)) {
-            log.warn("Email already exists: {}", email);
+            log.warn("Email already exists");
             throw new EmailAlreadyExistsException("Email is already registered: " + email);
         }
     }
@@ -125,7 +118,7 @@ public class UserService {
      */
     private void validateUsernameNotExists(final String username) {
         if (userRepository.existsByUsername(username)) {
-            log.warn("Username already exists: {}", username);
+            log.warn("Username already exists");
             throw new UsernameAlreadyExistsException("Username is already taken: " + username);
         }
     }
