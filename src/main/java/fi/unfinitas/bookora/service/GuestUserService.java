@@ -87,7 +87,6 @@ public class GuestUserService {
                 .email(email)
                 .phoneNumber(phoneNumber)
                 .isGuest(true)
-                .password(null) // Guest users have no password
                 .role(UserRole.USER)
                 .build();
     }

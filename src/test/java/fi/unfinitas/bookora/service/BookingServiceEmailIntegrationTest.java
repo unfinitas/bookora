@@ -42,7 +42,7 @@ class BookingServiceEmailIntegrationTest {
     private BookingRepository bookingRepository;
 
     @Mock
-    private ServiceService serviceService;
+    private ServiceOfferingService serviceOfferingService;
 
     @Mock
     private GuestUserService guestUserService;
@@ -60,7 +60,7 @@ class BookingServiceEmailIntegrationTest {
     private BookingServiceImpl bookingService;
 
     private CreateGuestBookingRequest validRequest;
-    private Service service;
+    private ServiceOffering serviceOffering;
     private User guestUser;
     private Provider provider;
     private Booking booking;
@@ -98,7 +98,7 @@ class BookingServiceEmailIntegrationTest {
             .businessName("Test Salon")
             .build();
 
-        service = Service.builder()
+        serviceOffering = ServiceOffering.builder()
             .id(1L)
             .name("Haircut")
             .description("Professional haircut")
@@ -109,7 +109,7 @@ class BookingServiceEmailIntegrationTest {
 
         booking = Booking.builder()
             .id(1L)
-            .service(service)
+            .serviceOffering(serviceOffering)
             .customer(guestUser)
             .provider(provider)
             .startTime(startTime)
@@ -122,7 +122,7 @@ class BookingServiceEmailIntegrationTest {
             .id(1L)
             .token(UUID.randomUUID())
             .booking(booking)
-            .expiresAt(endTime)
+            .expiresAt(endTime.plusDays(30))
             .build();
 
         guestBookingResponse = new GuestBookingResponse(
@@ -140,15 +140,22 @@ class BookingServiceEmailIntegrationTest {
             endTime
         );
 
-        // Stub BookoraProperties for event publishing (lenient to avoid UnnecessaryStubbingException)
+        // Stub BookoraProperties for event publishing and booking configuration (lenient to avoid UnnecessaryStubbingException)
         lenient().when(bookoraProperties.getFrontendUrl()).thenReturn("http://localhost:3000");
+
+        // Mock nested properties for booking cancellation window
+        final BookoraProperties.Guest guestProperties = mock(BookoraProperties.Guest.class);
+        final BookoraProperties.Guest.Booking bookingProperties = mock(BookoraProperties.Guest.Booking.class);
+        lenient().when(bookoraProperties.getGuest()).thenReturn(guestProperties);
+        lenient().when(guestProperties.getBooking()).thenReturn(bookingProperties);
+        lenient().when(bookingProperties.getCancellationWindowHours()).thenReturn(24);
     }
 
     @Test
     @DisplayName("createGuestBooking() - Valid request - Publishes SendMailEvent")
     void createGuestBooking_ValidRequest_PublishesSendMailEvent() {
         // GIVEN: Valid booking request
-        when(serviceService.getServiceById(1L)).thenReturn(service);
+        when(serviceOfferingService.getServiceOfferingById(1L)).thenReturn(serviceOffering);
         when(bookingRepository.existsOverlappingBooking(any(), any(), any())).thenReturn(false);
         when(guestUserService.findOrCreateGuestUser(anyString(), anyString(), anyString(), anyString()))
             .thenReturn(guestUser);
@@ -176,7 +183,7 @@ class BookingServiceEmailIntegrationTest {
     @DisplayName("createGuestBooking() - Event publishing fails - Booking still created")
     void createGuestBooking_EventPublishingFails_BookingStillCreated() {
         // GIVEN: EventPublisher throws exception
-        when(serviceService.getServiceById(1L)).thenReturn(service);
+        when(serviceOfferingService.getServiceOfferingById(1L)).thenReturn(serviceOffering);
         when(bookingRepository.existsOverlappingBooking(any(), any(), any())).thenReturn(false);
         when(guestUserService.findOrCreateGuestUser(anyString(), anyString(), anyString(), anyString()))
             .thenReturn(guestUser);
@@ -303,7 +310,7 @@ class BookingServiceEmailIntegrationTest {
     @DisplayName("createGuestBooking() - Event contains correct template variables")
     void createGuestBooking_EventContainsCorrectVariables() {
         // GIVEN: Valid booking request
-        when(serviceService.getServiceById(1L)).thenReturn(service);
+        when(serviceOfferingService.getServiceOfferingById(1L)).thenReturn(serviceOffering);
         when(bookingRepository.existsOverlappingBooking(any(), any(), any())).thenReturn(false);
         when(guestUserService.findOrCreateGuestUser(anyString(), anyString(), anyString(), anyString()))
             .thenReturn(guestUser);

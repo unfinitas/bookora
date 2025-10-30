@@ -44,7 +44,7 @@ public interface BookingService {
     /**
      * Cancel booking by access token.
      * Changes status to CANCELLED.
-     * Can only be cancelled up to 24 hours before booking start time.
+     * Can only be cancelled before the configured cancellation window (default: 24 hours before booking start time).
      * Cannot be undone after cancellation.
      *
      * @param token the UUID access token
@@ -52,19 +52,4 @@ public interface BookingService {
      */
     BookingResponse cancelBookingByToken(UUID token);
 
-    /**
-     * Validate guest access token and auto-confirm pending booking.
-     * This is called when guest clicks confirmation link in email.
-     *
-     * Behavior:
-     * - If booking is PENDING: auto-confirms to CONFIRMED and sets confirmed_at timestamp
-     * - If booking is already CONFIRMED: returns current status (idempotent)
-     * - If booking is CANCELLED: returns current status (no auto-confirm)
-     * - If token is expired (past booking end time): throws TokenExpiredException
-     * - If token is invalid: throws exception
-     *
-     * @param token the UUID access token
-     * @return booking response with current status
-     */
-    BookingResponse validateAndConfirmBooking(UUID token);
 }

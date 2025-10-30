@@ -98,3 +98,8 @@ bookora:
   email:
     from: test@bookora.test
     enabled: false  # Email disabled for tests
+  guest:
+    token:
+      expiration-extension-days: 30
+    booking:
+      cancellation-window-hours: 24

@@ -1,18 +1,23 @@
 package fi.unfinitas.bookora.exception;
 
 import fi.unfinitas.bookora.dto.response.ApiResponse;
+import jakarta.persistence.OptimisticLockException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * Global exception handler for the application.
@@ -89,6 +94,28 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Handle method argument type mismatch exception (e.g., invalid UUID format).
+     */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMethodArgumentTypeMismatch(final MethodArgumentTypeMismatchException ex) {
+        final String paramName = ex.getName();
+        final Object value = ex.getValue();
+        final Class<?> requiredType = ex.getRequiredType();
+
+        String errorMessage = String.format("Invalid value '%s' for parameter '%s'", value, paramName);
+
+        if (requiredType != null && requiredType.equals(UUID.class)) {
+            errorMessage = "Invalid token format. Token must be a valid UUID.";
+            log.debug("Invalid UUID format for parameter '{}': {}", paramName, value);
+        } else {
+            log.debug("Type mismatch for parameter '{}': expected {}, got {}", paramName, requiredType, value);
+        }
+
+        final ApiResponse<Void> response = ApiResponse.fail(errorMessage);
+        return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+    }
+
+    /**
      * Handle booking not found exception.
      */
     @ExceptionHandler(BookingNotFoundException.class)
@@ -99,11 +126,11 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Handle service not found exception.
+     * Handle service offering not found exception.
      */
-    @ExceptionHandler(ServiceNotFoundException.class)
-    public ResponseEntity<ApiResponse<Void>> handleServiceNotFound(final ServiceNotFoundException ex) {
-        log.debug("Service not found: {}", ex.getMessage());
+    @ExceptionHandler(ServiceOfferingNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleServiceOfferingNotFound(final ServiceOfferingNotFoundException ex) {
+        log.debug("Service offering not found: {}", ex.getMessage());
         final ApiResponse<Void> response = ApiResponse.fail(ex.getMessage());
         return new ResponseEntity<>(response, HttpStatus.NOT_FOUND);
     }
@@ -189,6 +216,30 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Handle customer booking conflict exception.
+     */
+    @ExceptionHandler(CustomerBookingConflictException.class)
+    public ResponseEntity<ApiResponse<Void>> handleCustomerBookingConflict(final CustomerBookingConflictException ex) {
+        log.debug("Customer booking conflict: {}", ex.getMessage());
+        final ApiResponse<Void> response = ApiResponse.fail(ex.getMessage());
+        return new ResponseEntity<>(response, HttpStatus.CONFLICT);
+    }
+
+    /**
+     * Handle optimistic locking failures.
+     * Occurs when two users/threads try to modify the same entity simultaneously.
+     * The version field prevents lost updates by detecting concurrent modifications.
+     */
+    @ExceptionHandler({OptimisticLockException.class, ObjectOptimisticLockingFailureException.class})
+    public ResponseEntity<ApiResponse<Void>> handleOptimisticLockException(final Exception ex) {
+        log.warn("Optimistic lock conflict detected: {}", ex.getMessage());
+        final ApiResponse<Void> response = ApiResponse.fail(
+                "This record was modified by another user. Please refresh and try again."
+        );
+        return new ResponseEntity<>(response, HttpStatus.CONFLICT);
+    }
+
+    /**
      * Handle generic exceptions.
      */
     @ExceptionHandler(Exception.class)
@@ -196,5 +247,30 @@ public class GlobalExceptionHandler {
         log.error("Unexpected error occurred", ex);
         final ApiResponse<Void> response = ApiResponse.error("An unexpected error occurred");
         return new ResponseEntity<>(response, HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+
+    /**
+     * Handle DataIntegrityViolation except booking overlap
+     */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDataIntegrityViolation(
+            final DataIntegrityViolationException ex) {
+        final String message = ex.getMessage() != null ? ex.getMessage().toLowerCase() : "";
+
+        // Check if this is a foreign key constraint violation
+        if (message.contains("foreign key") || message.contains("violates") || message.contains("referenced")) {
+            log.warn("Foreign key constraint violation: Cannot delete entity with associated data", ex);
+            final ApiResponse<Void> response = ApiResponse.fail(
+                    "Cannot delete this record because it has associated data. " +
+                    "Please remove or reassign the related records first."
+            );
+            return new ResponseEntity<>(response, HttpStatus.CONFLICT);
+        }
+
+        log.error("Database constraint violation", ex);
+        final ApiResponse<Void> response = ApiResponse.fail(
+                "The request could not be completed due to a data constraint violation."
+        );
+        return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
     }
 }

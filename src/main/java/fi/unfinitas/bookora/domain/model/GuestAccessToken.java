@@ -2,13 +2,12 @@ package fi.unfinitas.bookora.domain.model;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.SQLRestriction;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-/**
- * GuestAccessToken entity for providing temporary access to bookings for guest users.
- */
 @Entity
 @Getter
 @Setter
@@ -16,11 +15,10 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 @EqualsAndHashCode(of = "id", callSuper = false)
-@Table(name = "t_guest_access_token", uniqueConstraints = {
-        @UniqueConstraint(name = "uq_guest_access_token_token", columnNames = "token"),
-        @UniqueConstraint(name = "uq_guest_access_token_booking_id", columnNames = "booking_id")
-})
-public class GuestAccessToken extends BaseEntity {
+@Table(name = "t_guest_access_token")
+@SQLRestriction("deleted_at IS NULL")
+@SQLDelete(sql = "UPDATE t_guest_access_token SET deleted_at = NOW(), updated_at = NOW() WHERE id = ?")
+public class GuestAccessToken extends VersionedBaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -47,16 +45,6 @@ public class GuestAccessToken extends BaseEntity {
      */
     public boolean isExpired() {
         return LocalDateTime.now().isAfter(expiresAt);
-    }
-
-    /**
-     * Check if the token is valid (not expired).
-     * Note: confirmedAt does not affect validity - tokens can be reused.
-     *
-     * @return true if the token has not expired
-     */
-    public boolean isValid() {
-        return !isExpired();
     }
 
     /**

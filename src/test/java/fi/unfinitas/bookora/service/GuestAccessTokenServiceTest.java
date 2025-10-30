@@ -1,5 +1,6 @@
 package fi.unfinitas.bookora.service;
 
+import fi.unfinitas.bookora.config.BookoraProperties;
 import fi.unfinitas.bookora.domain.model.Booking;
 import fi.unfinitas.bookora.domain.model.GuestAccessToken;
 import fi.unfinitas.bookora.exception.InvalidTokenException;
@@ -28,6 +29,9 @@ class GuestAccessTokenServiceTest {
     @Mock
     private GuestAccessTokenRepository tokenRepository;
 
+    @Mock
+    private BookoraProperties bookoraProperties;
+
     @InjectMocks
     private GuestAccessTokenService tokenService;
 
@@ -44,10 +48,16 @@ class GuestAccessTokenServiceTest {
 
         lenient().when(testBooking.getEndTime()).thenReturn(bookingEndTime);
 
+        final BookoraProperties.Guest guest = mock(BookoraProperties.Guest.class);
+        final BookoraProperties.Guest.Token token = mock(BookoraProperties.Guest.Token.class);
+        lenient().when(bookoraProperties.getGuest()).thenReturn(guest);
+        lenient().when(guest.getToken()).thenReturn(token);
+        lenient().when(token.getExpirationExtensionDays()).thenReturn(30);
+
         testToken = GuestAccessToken.builder()
                 .token(tokenUUID)
                 .booking(testBooking)
-                .expiresAt(bookingEndTime)
+                .expiresAt(bookingEndTime.plusDays(30))
                 .build();
     }
 
@@ -61,7 +71,7 @@ class GuestAccessTokenServiceTest {
         assertThat(result).isNotNull();
         assertThat(result.getToken()).isNotNull();
         assertThat(result.getBooking()).isEqualTo(testBooking);
-        assertThat(result.getExpiresAt()).isEqualTo(bookingEndTime);
+        assertThat(result.getExpiresAt()).isEqualTo(bookingEndTime.plusDays(30));
 
         verify(tokenRepository).save(any(GuestAccessToken.class));
     }
@@ -85,7 +95,7 @@ class GuestAccessTokenServiceTest {
 
         assertThatThrownBy(() -> tokenService.validateToken(tokenUUID))
                 .isInstanceOf(InvalidTokenException.class)
-                .hasMessageContaining("Invalid or non-existent");
+                .hasMessageContaining("Token not found");
 
         verify(tokenRepository).findByToken(tokenUUID);
     }

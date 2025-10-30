@@ -3,12 +3,11 @@ package fi.unfinitas.bookora.domain.model;
 import fi.unfinitas.bookora.domain.enums.BookingStatus;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.SQLRestriction;
 
 import java.time.LocalDateTime;
 
-/**
- * Booking entity representing service bookings made by customers.
- */
 @Entity
 @Table(name = "t_booking")
 @Getter
@@ -17,7 +16,9 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Builder
 @EqualsAndHashCode(of = "id", callSuper = false)
-public class Booking extends BaseEntity {
+@SQLRestriction("deleted_at IS NULL")
+@SQLDelete(sql = "UPDATE t_booking SET deleted_at = NOW(), updated_at = NOW() WHERE id = ?")
+public class Booking extends VersionedBaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -33,7 +34,7 @@ public class Booking extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "service_id", nullable = false)
-    private Service service;
+    private ServiceOffering serviceOffering;
 
     @Column(name = "start_time", nullable = false)
     private LocalDateTime startTime;

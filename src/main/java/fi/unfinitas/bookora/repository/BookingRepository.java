@@ -47,4 +47,23 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
             @Param("startTime") LocalDateTime startTime,
             @Param("endTime") LocalDateTime endTime
     );
+
+    /**
+     * Check if there are any overlapping bookings for a customer in the given time range.
+     * Only considers bookings with status PENDING or CONFIRMED.
+     * This prevents a customer from booking multiple appointments at the same time.
+     *
+     * @param customerId the customer's user ID
+     * @param startTime  the start time of the new booking
+     * @param endTime    the end time of the new booking
+     * @return true if there is an overlapping booking, false otherwise
+     */
+    @Query("SELECT COUNT(b) > 0 FROM Booking b WHERE b.customer.id = :customerId " +
+            "AND b.status IN ('PENDING', 'CONFIRMED') " +
+            "AND ((b.startTime < :endTime AND b.endTime > :startTime))")
+    boolean existsCustomerOverlappingBooking(
+            @Param("customerId") UUID customerId,
+            @Param("startTime") LocalDateTime startTime,
+            @Param("endTime") LocalDateTime endTime
+    );
 }

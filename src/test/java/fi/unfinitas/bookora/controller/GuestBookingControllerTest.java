@@ -5,9 +5,9 @@ import fi.unfinitas.bookora.config.security.JwtAuthenticationFilter;
 import fi.unfinitas.bookora.dto.request.CreateGuestBookingRequest;
 import fi.unfinitas.bookora.dto.response.BookingResponse;
 import fi.unfinitas.bookora.dto.response.GuestBookingResponse;
-import fi.unfinitas.bookora.dto.response.ServiceResponse;
+import fi.unfinitas.bookora.dto.response.ServiceOfferingResponse;
 import fi.unfinitas.bookora.exception.InvalidTokenException;
-import fi.unfinitas.bookora.exception.ServiceNotFoundException;
+import fi.unfinitas.bookora.exception.ServiceOfferingNotFoundException;
 import fi.unfinitas.bookora.exception.TokenExpiredException;
 import fi.unfinitas.bookora.security.JwtUtil;
 import fi.unfinitas.bookora.service.BookingService;
@@ -73,7 +73,7 @@ class GuestBookingControllerTest {
                 .notes("Test booking")
                 .build();
 
-        final ServiceResponse serviceResponse = new ServiceResponse(
+        final ServiceOfferingResponse serviceOfferingResponse = new ServiceOfferingResponse(
                 1L,
                 "Haircut",
                 "Professional haircut service",
@@ -84,7 +84,7 @@ class GuestBookingControllerTest {
 
         guestBookingResponse = new GuestBookingResponse(
                 1L,
-                serviceResponse,
+                serviceOfferingResponse,
                 "John Doe",
                 "john.doe@example.com",
                 "010-1234-5678",
@@ -99,7 +99,7 @@ class GuestBookingControllerTest {
 
         bookingResponse = new BookingResponse(
                 1L,
-                serviceResponse,
+                serviceOfferingResponse,
                 "John Doe",
                 "john.doe@example.com",
                 "010-1234-5678",
@@ -152,10 +152,10 @@ class GuestBookingControllerTest {
     }
 
     @Test
-    @DisplayName("Should return 404 when service not found")
-    void shouldReturn404WhenServiceNotFound() throws Exception {
+    @DisplayName("Should return 404 when service offering not found")
+    void shouldReturn404WhenServiceOfferingNotFound() throws Exception {
         when(bookingService.createGuestBooking(any(CreateGuestBookingRequest.class)))
-                .thenThrow(new ServiceNotFoundException("Service not found"));
+                .thenThrow(new ServiceOfferingNotFoundException("Service offering not found"));
 
         assertThat(mockMvcTester.post()
                         .uri("/bookings/guest")
@@ -193,11 +193,23 @@ class GuestBookingControllerTest {
     }
 
     @Test
+    @DisplayName("Should return 401 when token is invalid")
+    void shouldReturn401WhenTokenIsInvalid() {
+        when(bookingService.getBookingByToken(testToken))
+                .thenThrow(new InvalidTokenException("Token not found"));
+
+        assertThat(mockMvcTester.get().uri("/bookings/guest/{token}", testToken))
+                .hasStatus(HttpStatus.UNAUTHORIZED);
+
+        verify(bookingService).getBookingByToken(testToken);
+    }
+
+    @Test
     @DisplayName("Should cancel booking successfully")
     void shouldCancelBookingSuccessfully() {
         final BookingResponse cancelledResponse = new BookingResponse(
                 1L,
-                bookingResponse.service(),
+                bookingResponse.serviceOffering(),
                 "John Doe",
                 "john.doe@example.com",
                 "010-1234-5678",
@@ -210,7 +222,7 @@ class GuestBookingControllerTest {
 
         when(bookingService.cancelBookingByToken(testToken)).thenReturn(cancelledResponse);
 
-        assertThat(mockMvcTester.delete().uri("/bookings/guest/{token}", testToken))
+        assertThat(mockMvcTester.patch().uri("/bookings/guest/{token}", testToken))
                 .hasStatusOk()
                 .bodyJson()
                 .hasPathSatisfying("$.status", status -> assertThat(status).isEqualTo("SUCCESS"))

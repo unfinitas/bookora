@@ -4,11 +4,11 @@ import java.time.LocalDateTime;
 
 /**
  * DTO for booking response.
- * Contains booking details with service and customer information.
+ * Contains booking details with service offering and customer information.
  */
 public record BookingResponse(
     Long id,
-    ServiceResponse service,
+    ServiceOfferingResponse serviceOffering,
     String customerName,
     String customerEmail,
     String customerPhone,

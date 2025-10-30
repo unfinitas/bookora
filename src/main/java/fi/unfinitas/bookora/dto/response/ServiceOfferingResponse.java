@@ -3,10 +3,10 @@ package fi.unfinitas.bookora.dto.response;
 import java.math.BigDecimal;
 
 /**
- * DTO for service response.
- * Contains service details including provider information.
+ * DTO for service offering response.
+ * Contains service offering details including provider information.
  */
-public record ServiceResponse(
+public record ServiceOfferingResponse(
     Long id,
     String name,
     String description,

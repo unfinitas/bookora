@@ -1,7 +1,7 @@
 package fi.unfinitas.bookora.repository;
 
 import fi.unfinitas.bookora.config.RepositoryTestConfiguration;
-import fi.unfinitas.bookora.domain.model.Service;
+import fi.unfinitas.bookora.domain.model.ServiceOffering;
 import fi.unfinitas.bookora.testutil.TestDataBuilder;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,40 +17,40 @@ import static org.assertj.core.api.Assertions.assertThat;
 @DataJpaTest
 @Import(RepositoryTestConfiguration.class)
 @ActiveProfiles("test")
-class ServiceRepositoryTest {
+class ServiceOfferingRepositoryTest {
 
     @Autowired
-    private ServiceRepository serviceRepository;
+    private ServiceOfferingRepository serviceOfferingRepository;
 
     @Autowired
     private TestEntityManager entityManager;
 
     @Test
-    void findById_ExistingService_ReturnsService() {
-        // GIVEN: Service exists in database
-        // First persist User, then Provider, then Service
+    void findById_ExistingServiceOffering_ReturnsServiceOffering() {
+        // GIVEN: ServiceOffering exists in database
+        // First persist User, then Provider, then ServiceOffering
         final var user = TestDataBuilder.user().build();
         entityManager.persist(user);
 
         final var provider = TestDataBuilder.provider().user(user).build();
         entityManager.persist(provider);
 
-        final Service service = TestDataBuilder.service().provider(provider).build();
-        final Service saved = entityManager.persistAndFlush(service);
+        final ServiceOffering serviceOffering = TestDataBuilder.serviceOffering().provider(provider).build();
+        final ServiceOffering saved = entityManager.persistAndFlush(serviceOffering);
 
         // WHEN: findById is called
-        final Optional<Service> result = serviceRepository.findById(saved.getId());
+        final Optional<ServiceOffering> result = serviceOfferingRepository.findById(saved.getId());
 
-        // THEN: Service is returned
+        // THEN: ServiceOffering is returned
         assertThat(result).isPresent();
         assertThat(result.get().getName()).isEqualTo("Haircut");
     }
 
     @Test
-    void findById_NonExistentService_ReturnsEmpty() {
-        // GIVEN: Service ID does not exist
+    void findById_NonExistentServiceOffering_ReturnsEmpty() {
+        // GIVEN: ServiceOffering ID does not exist
         // WHEN: findById is called
-        final Optional<Service> result = serviceRepository.findById(999L);
+        final Optional<ServiceOffering> result = serviceOfferingRepository.findById(999L);
 
         // THEN: Optional.empty() is returned
         assertThat(result).isEmpty();

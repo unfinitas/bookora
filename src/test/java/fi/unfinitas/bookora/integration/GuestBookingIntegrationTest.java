@@ -1,6 +1,5 @@
 package fi.unfinitas.bookora.integration;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import fi.unfinitas.bookora.config.TestContainersConfiguration;
 import fi.unfinitas.bookora.config.TestEmailConfiguration;
@@ -30,6 +29,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Import({TestContainersConfiguration.class, TestEmailConfiguration.class})
 @ActiveProfiles("test")
 @DisplayName("Guest Booking Integration Tests")
+@org.springframework.test.context.jdbc.Sql(
+        statements = {
+                "TRUNCATE TABLE t_guest_access_token CASCADE",
+                "TRUNCATE TABLE t_booking CASCADE",
+                "TRUNCATE TABLE t_service CASCADE",
+                "TRUNCATE TABLE t_provider CASCADE",
+                "TRUNCATE TABLE t_user CASCADE"
+        },
+        executionPhase = org.springframework.test.context.jdbc.Sql.ExecutionPhase.BEFORE_TEST_METHOD
+)
 class GuestBookingIntegrationTest {
 
     @Autowired
@@ -48,23 +57,17 @@ class GuestBookingIntegrationTest {
     private UserRepository userRepository;
 
     @Autowired
-    private ServiceRepository serviceRepository;
+    private ServiceOfferingRepository serviceOfferingRepository;
 
     @Autowired
     private ProviderRepository providerRepository;
 
-    private Long testServiceId;
+    private Long testServiceOfferingId;
 
     @BeforeEach
     void setUp() {
-        // Clean database before each test (order matters due to foreign key constraints)
-        tokenRepository.deleteAll();       // First - has FK to booking
-        bookingRepository.deleteAll();     // Second - has FK to service, provider, user
-        serviceRepository.deleteAll();     // Third - has FK to provider
-        providerRepository.deleteAll();    // Fourth - has FK to user
-        userRepository.deleteAll();        // Last - base entity
-
-        // Create test data: User → Provider → Service
+        // Database is truncated by @Sql annotation before each test
+        // Create test data: User → Provider → ServiceOffering
         final var providerUser = TestDataBuilder.user()
                 .username("provider_user")
                 .email("provider@example.com")
@@ -76,14 +79,13 @@ class GuestBookingIntegrationTest {
                 .build();
         final var savedProvider = providerRepository.save(provider);
 
-        final var service = TestDataBuilder.service()
+        final var serviceOffering = TestDataBuilder.serviceOffering()
                 .provider(savedProvider)
                 .build();
-        final var savedService = serviceRepository.save(service);
-        testServiceId = savedService.getId();  // Capture auto-generated ID
+        final var savedServiceOffering = serviceOfferingRepository.save(serviceOffering);
+        testServiceOfferingId = savedServiceOffering.getId();  // Capture auto-generated ID
     }
-
-    // ===== HAPPY PATH TESTS =====
+    
 
     @Test
     @DisplayName("Complete guest booking flow: create -> validate (auto-confirm) -> view -> cancel")
@@ -94,7 +96,7 @@ class GuestBookingIntegrationTest {
                 .lastName("Doe")
                 .email("john.doe@example.com")
                 .phoneNumber("010-1234-5678")
-                .serviceId(testServiceId)
+                .serviceId(testServiceOfferingId)
                 .startTime(LocalDateTime.now().plusDays(2))
                 .endTime(LocalDateTime.now().plusDays(2).plusHours(1))
                 .notes("Test booking")
@@ -142,16 +144,17 @@ class GuestBookingIntegrationTest {
                 .extractingPath("$.data.status").isEqualTo("CONFIRMED");
 
         // 5. Cancel booking
-        assertThat(mockMvcTester.delete().uri("/bookings/guest/" + token))
+        assertThat(mockMvcTester.patch().uri("/bookings/guest/" + token))
                 .hasStatusOk()
                 .bodyJson()
                 .extractingPath("$.data.status").isEqualTo("CANCELLED");
 
-        // 6. Verify booking still viewable after cancellation
+        // 6. Verify token is revoked after cancellation (soft deleted)
         assertThat(mockMvcTester.get().uri("/bookings/guest/" + token))
-                .hasStatusOk()
+                .hasStatus(HttpStatus.UNAUTHORIZED)
                 .bodyJson()
-                .extractingPath("$.data.status").isEqualTo("CANCELLED");
+                .extractingPath("$.message").asString()
+                .contains("Token not found");
     }
 
     @Test
@@ -163,7 +166,7 @@ class GuestBookingIntegrationTest {
                 .lastName("Smith")
                 .email("jane.smith@example.com")
                 .phoneNumber("010-9876-5432")
-                .serviceId(testServiceId)
+                .serviceId(testServiceOfferingId)
                 .startTime(LocalDateTime.now().plusDays(3))
                 .endTime(LocalDateTime.now().plusDays(3).plusHours(1))
                 .build();
@@ -190,19 +193,19 @@ class GuestBookingIntegrationTest {
                 .extractingPath("$.data.status").isEqualTo("CONFIRMED");
 
         // 3. Cancel booking
-        assertThat(mockMvcTester.delete().uri("/bookings/guest/" + token))
+        assertThat(mockMvcTester.patch().uri("/bookings/guest/" + token))
                 .hasStatusOk()
                 .bodyJson()
                 .extractingPath("$.data.status").isEqualTo("CANCELLED");
 
-        // 4. Verify cancellation succeeded
+        // 4. Verify token is revoked after cancellation (soft deleted)
         assertThat(mockMvcTester.get().uri("/bookings/guest/" + token))
-                .hasStatusOk()
+                .hasStatus(HttpStatus.UNAUTHORIZED)
                 .bodyJson()
-                .extractingPath("$.data.status").isEqualTo("CANCELLED");
+                .extractingPath("$.message").asString()
+                .contains("Token not found");
     }
-
-    // ===== ERROR SCENARIOS =====
+    
 
     @Test
     @DisplayName("Confirm booking successfully")
@@ -213,7 +216,7 @@ class GuestBookingIntegrationTest {
                 .lastName("User")
                 .email("test@example.com")
                 .phoneNumber("010-1111-2222")
-                .serviceId(testServiceId)
+                .serviceId(testServiceOfferingId)
                 .startTime(LocalDateTime.now().plusDays(1))
                 .endTime(LocalDateTime.now().plusDays(1).plusHours(1))
                 .build();
@@ -258,7 +261,7 @@ class GuestBookingIntegrationTest {
                 .lastName("User")
                 .email("test@example.com")
                 .phoneNumber("010-1111-2222")
-                .serviceId(testServiceId)
+                .serviceId(testServiceOfferingId)
                 .startTime(LocalDateTime.now().plusHours(20))
                 .endTime(LocalDateTime.now().plusHours(21))
                 .build();
@@ -280,7 +283,7 @@ class GuestBookingIntegrationTest {
 
         // 2. Try to cancel
         // 3. Expect 400 BAD_REQUEST
-        assertThat(mockMvcTester.delete().uri("/bookings/guest/" + token))
+        assertThat(mockMvcTester.patch().uri("/bookings/guest/" + token))
                 .hasStatus(HttpStatus.BAD_REQUEST);
     }
 
@@ -295,7 +298,7 @@ class GuestBookingIntegrationTest {
                 .lastName("Doe")
                 .email(email)
                 .phoneNumber("010-1234-5678")
-                .serviceId(testServiceId)
+                .serviceId(testServiceOfferingId)
                 .startTime(LocalDateTime.now().plusDays(1))
                 .endTime(LocalDateTime.now().plusDays(1).plusHours(1))
                 .build();
@@ -312,7 +315,7 @@ class GuestBookingIntegrationTest {
                 .lastName("Doe")
                 .email(email)
                 .phoneNumber("010-1234-5678")
-                .serviceId(testServiceId)
+                .serviceId(testServiceOfferingId)
                 .startTime(LocalDateTime.now().plusDays(2))
                 .endTime(LocalDateTime.now().plusDays(2).plusHours(1))
                 .build();
@@ -332,6 +335,173 @@ class GuestBookingIntegrationTest {
         final var guestUsers = users.stream().filter(u -> u.getEmail().equals(email)).toList();
         assertThat(guestUsers).hasSize(1);
         assertThat(guestUsers.get(0).getIsGuest()).isTrue();
+    }
+
+    @Test
+    @DisplayName("Customer cannot book overlapping appointments")
+    void customerCannotBookOverlappingAppointments() {
+        final String email = "overlap@example.com";
+
+        // Create second provider and service offering to test customer overlap (not provider overlap)
+        final var providerUser2 = TestDataBuilder.user()
+                .username("provider_user_2")
+                .email("provider2@example.com")
+                .build();
+        final var savedProviderUser2 = userRepository.save(providerUser2);
+
+        final var provider2 = TestDataBuilder.provider()
+                .user(savedProviderUser2)
+                .businessName("Second Provider")
+                .build();
+        final var savedProvider2 = providerRepository.save(provider2);
+
+        final var serviceOffering2 = TestDataBuilder.serviceOffering()
+                .provider(savedProvider2)
+                .name("Different Service")
+                .build();
+        final var savedServiceOffering2 = serviceOfferingRepository.save(serviceOffering2);
+
+        // 1. Create first booking with provider1: 10:00-11:00 tomorrow
+        final LocalDateTime baseTime = LocalDateTime.now().plusDays(1).withHour(10).withMinute(0).withSecond(0).withNano(0);
+        final CreateGuestBookingRequest request1 = CreateGuestBookingRequest.builder()
+                .firstName("John")
+                .lastName("Doe")
+                .email(email)
+                .phoneNumber("010-1234-5678")
+                .serviceId(testServiceOfferingId)
+                .startTime(baseTime)
+                .endTime(baseTime.plusHours(1))
+                .build();
+
+        assertThat(mockMvcTester.post()
+                        .uri("/bookings/guest")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(request1)))
+                .hasStatus(HttpStatus.CREATED);
+
+        // 2. Try to create overlapping booking with provider2: 10:30-11:30 (overlap)
+        final CreateGuestBookingRequest request2 = CreateGuestBookingRequest.builder()
+                .firstName("John")
+                .lastName("Doe")
+                .email(email)
+                .phoneNumber("010-1234-5678")
+                .serviceId(savedServiceOffering2.getId())
+                .startTime(baseTime.plusMinutes(30))
+                .endTime(baseTime.plusMinutes(90))
+                .build();
+
+        assertThat(mockMvcTester.post()
+                        .uri("/bookings/guest")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(request2)))
+                .hasStatus(HttpStatus.CONFLICT)
+                .bodyJson()
+                .extractingPath("$.message").asString()
+                .contains("already have a booking during this time");
+
+        // 3. Verify only one booking created
+        assertThat(bookingRepository.findAll()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("Customer can book non-overlapping appointments")
+    void customerCanBookNonOverlappingAppointments() {
+        final String email = "nonoverlap@example.com";
+
+        // 1. Create first booking: 10:00-11:00 tomorrow
+        final LocalDateTime baseTime = LocalDateTime.now().plusDays(1).withHour(10).withMinute(0);
+        final CreateGuestBookingRequest request1 = CreateGuestBookingRequest.builder()
+                .firstName("John")
+                .lastName("Doe")
+                .email(email)
+                .phoneNumber("010-1234-5678")
+                .serviceId(testServiceOfferingId)
+                .startTime(baseTime)
+                .endTime(baseTime.plusHours(1))
+                .build();
+
+        assertThat(mockMvcTester.post()
+                        .uri("/bookings/guest")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(request1)))
+                .hasStatus(HttpStatus.CREATED);
+
+        // 2. Create non-overlapping booking: 11:00-12:00 (no overlap)
+        final CreateGuestBookingRequest request2 = CreateGuestBookingRequest.builder()
+                .firstName("John")
+                .lastName("Doe")
+                .email(email)
+                .phoneNumber("010-1234-5678")
+                .serviceId(testServiceOfferingId)
+                .startTime(baseTime.plusHours(1))
+                .endTime(baseTime.plusHours(2))
+                .build();
+
+        assertThat(mockMvcTester.post()
+                        .uri("/bookings/guest")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(request2)))
+                .hasStatus(HttpStatus.CREATED);
+
+        // 3. Verify both bookings created
+        assertThat(bookingRepository.findAll()).hasSize(2);
+    }
+
+    @Test
+    @DisplayName("Cancelled customer booking allows new booking at same time")
+    void cancelledCustomerBookingAllowsNewBookingAtSameTime() throws Exception {
+        final String email = "cancel-overlap@example.com";
+
+        // 1. Create first booking: 10:00-11:00 (3 days from now to allow cancellation)
+        final LocalDateTime baseTime = LocalDateTime.now().plusDays(3).withHour(10).withMinute(0);
+        final CreateGuestBookingRequest request1 = CreateGuestBookingRequest.builder()
+                .firstName("John")
+                .lastName("Doe")
+                .email(email)
+                .phoneNumber("010-1234-5678")
+                .serviceId(testServiceOfferingId)
+                .startTime(baseTime)
+                .endTime(baseTime.plusHours(1))
+                .build();
+
+        final var createResult = mockMvcTester.post()
+                .uri("/bookings/guest")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(toJson(request1))
+                .exchange();
+
+        assertThat(createResult).hasStatus(HttpStatus.CREATED);
+
+        final String responseBody = createResult.getMvcResult().getResponse().getContentAsString();
+        final UUID token = objectMapper.readTree(responseBody)
+                .get("data")
+                .get("accessToken")
+                .traverse(objectMapper)
+                .readValueAs(UUID.class);
+
+        // 2. Cancel the first booking
+        assertThat(mockMvcTester.patch().uri("/bookings/guest/" + token))
+                .hasStatusOk();
+
+        // 3. Create new booking at same time (should succeed since first is cancelled)
+        final CreateGuestBookingRequest request2 = CreateGuestBookingRequest.builder()
+                .firstName("John")
+                .lastName("Doe")
+                .email(email)
+                .phoneNumber("010-1234-5678")
+                .serviceId(testServiceOfferingId)
+                .startTime(baseTime)
+                .endTime(baseTime.plusHours(1))
+                .build();
+
+        assertThat(mockMvcTester.post()
+                        .uri("/bookings/guest")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(request2)))
+                .hasStatus(HttpStatus.CREATED);
+
+        // 4. Verify two bookings exist (one cancelled, one pending/confirmed)
+        assertThat(bookingRepository.findAll()).hasSize(2);
     }
 
     // ===== SECURITY TESTS =====
@@ -359,7 +529,7 @@ class GuestBookingIntegrationTest {
         // 2. Try to get booking
         // 3. Expect 404 NOT_FOUND
         assertThat(mockMvcTester.get().uri("/bookings/guest/" + randomToken))
-                .hasStatus(HttpStatus.NOT_FOUND);
+                .hasStatus(HttpStatus.UNAUTHORIZED);
     }
 
     @Test
@@ -371,7 +541,7 @@ class GuestBookingIntegrationTest {
                 .lastName("Test")
                 .email("session@example.com")
                 .phoneNumber("010-9999-8888")
-                .serviceId(testServiceId)
+                .serviceId(testServiceOfferingId)
                 .startTime(LocalDateTime.now().plusDays(1))
                 .endTime(LocalDateTime.now().plusDays(1).plusHours(1))
                 .build();

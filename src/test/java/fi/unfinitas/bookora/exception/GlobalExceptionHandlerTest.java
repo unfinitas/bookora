@@ -1,11 +1,13 @@
 package fi.unfinitas.bookora.exception;
 
 import fi.unfinitas.bookora.dto.response.ApiResponse;
+import jakarta.persistence.OptimisticLockException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.validation.BindingResult;
 import org.springframework.validation.FieldError;
@@ -177,16 +179,16 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
-    @DisplayName("Should handle service not found exception")
-    void shouldHandleServiceNotFoundException() {
-        final ServiceNotFoundException ex = new ServiceNotFoundException("Service not found");
+    @DisplayName("Should handle service offering not found exception")
+    void shouldHandleServiceOfferingNotFoundException() {
+        final ServiceOfferingNotFoundException ex = new ServiceOfferingNotFoundException("Service offering not found");
 
-        final ResponseEntity<ApiResponse<Void>> response = globalExceptionHandler.handleServiceNotFound(ex);
+        final ResponseEntity<ApiResponse<Void>> response = globalExceptionHandler.handleServiceOfferingNotFound(ex);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().getStatus()).isEqualTo("FAIL");
-        assertThat(response.getBody().getMessage()).isEqualTo("Service not found");
+        assertThat(response.getBody().getMessage()).isEqualTo("Service offering not found");
     }
 
     @Test
@@ -280,5 +282,34 @@ class GlobalExceptionHandlerTest {
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().getStatus()).isEqualTo("FAIL");
         assertThat(response.getBody().getMessage()).isEqualTo("Cannot cancel booking within 24 hours");
+    }
+
+    @Test
+    @DisplayName("Should handle OptimisticLockException")
+    void shouldHandleOptimisticLockException() {
+        final OptimisticLockException ex = new OptimisticLockException("Version mismatch detected");
+
+        final ResponseEntity<ApiResponse<Void>> response = globalExceptionHandler.handleOptimisticLockException(ex);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getStatus()).isEqualTo("FAIL");
+        assertThat(response.getBody().getMessage()).isEqualTo("This record was modified by another user. Please refresh and try again.");
+    }
+
+    @Test
+    @DisplayName("Should handle ObjectOptimisticLockingFailureException")
+    void shouldHandleObjectOptimisticLockingFailureException() {
+        final ObjectOptimisticLockingFailureException ex = new ObjectOptimisticLockingFailureException(
+                "Booking",
+                1L
+        );
+
+        final ResponseEntity<ApiResponse<Void>> response = globalExceptionHandler.handleOptimisticLockException(ex);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getStatus()).isEqualTo("FAIL");
+        assertThat(response.getBody().getMessage()).isEqualTo("This record was modified by another user. Please refresh and try again.");
     }
 }

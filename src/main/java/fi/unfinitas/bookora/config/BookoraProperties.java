@@ -5,6 +5,9 @@ import jakarta.validation.constraints.NotBlank;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.stereotype.Component;
 import org.springframework.validation.annotation.Validated;
 
 /**
@@ -15,6 +18,7 @@ import org.springframework.validation.annotation.Validated;
 @Validated
 @Getter
 @Setter
+@Configuration
 public class BookoraProperties {
 
     /**
@@ -56,14 +60,27 @@ public class BookoraProperties {
          */
         private Token token = new Token();
 
+        /**
+         * Guest booking configuration.
+         */
+        private Booking booking = new Booking();
+
         @Getter
         @Setter
         public static class Token {
+            @Min(value = 0, message = "Token expiration extension days must be at least 0")
+            private int expirationExtensionDays = 30;
+        }
+
+        @Getter
+        @Setter
+        public static class Booking {
             /**
-             * Token expiration in days (informational - actual expiration is booking end time).
+             * Hours before booking start time when cancellation is no longer allowed.
+             * Default: 24 hours
              */
-            @Min(value = 1, message = "Token expiration days must be at least 1")
-            private int expirationDays = 1;
+            @Min(value = 1, message = "Cancellation window must be at least 1 hour")
+            private int cancellationWindowHours = 24;
         }
     }
 }

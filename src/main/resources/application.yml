@@ -70,12 +70,12 @@ bookora:
     from: ${EMAIL_FROM:noreply@bookora.fi}
     enabled: ${EMAIL_ENABLED:true}
 
-  # Guest Token Configuration
+  # Guest Configuration
   guest:
     token:
-      # Token expires at booking end time (not configurable days)
-      # This setting is kept for potential future features
-      expiration-days: 1
+      expiration-extension-days: 30
+    booking:
+      cancellation-window-hours: 24
 
 # Logging Configuration (Base)
 logging:

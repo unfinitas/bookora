@@ -23,8 +23,8 @@ public class TestDataBuilder {
             .notes("Test booking");
     }
 
-    public static Service.ServiceBuilder service() {
-        return Service.builder()
+    public static ServiceOffering.ServiceOfferingBuilder serviceOffering() {
+        return ServiceOffering.builder()
             .name("Haircut")
             .description("Professional haircut")
             .durationMinutes(60)
@@ -68,6 +68,6 @@ public class TestDataBuilder {
     public static GuestAccessToken.GuestAccessTokenBuilder guestAccessToken() {
         return GuestAccessToken.builder()
             .token(UUID.randomUUID())
-            .expiresAt(LocalDateTime.now().plusDays(2).plusHours(1));
+            .expiresAt(LocalDateTime.now().plusDays(32).plusHours(1));
     }
 }

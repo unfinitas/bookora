@@ -3,14 +3,13 @@ package fi.unfinitas.bookora.domain.model;
 import fi.unfinitas.bookora.domain.enums.UserRole;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.SQLRestriction;
 
 import java.util.UUID;
 
 import static fi.unfinitas.bookora.domain.enums.UserRole.USER;
 
-/**
- * User entity representing both regular users and service providers.
- */
 @Entity
 @Getter
 @Setter
@@ -18,10 +17,9 @@ import static fi.unfinitas.bookora.domain.enums.UserRole.USER;
 @AllArgsConstructor
 @Builder
 @EqualsAndHashCode(of = "id", callSuper = false)
-@Table(name = "t_user", uniqueConstraints = {
-        @UniqueConstraint(name = "uq_user_email", columnNames = "email"),
-        @UniqueConstraint(name = "uq_user_username", columnNames = "username")
-})
+@Table(name = "t_user")
+@SQLRestriction("deleted_at IS NULL")
+@SQLDelete(sql = "UPDATE t_user SET deleted_at = NOW(), updated_at = NOW() WHERE id = ?")
 public class User extends BaseEntity {
 
     @Id
@@ -40,7 +38,7 @@ public class User extends BaseEntity {
     @Column(nullable = false)
     private String email;
 
-    private String password;
+    private String password = null;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)

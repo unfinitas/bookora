@@ -9,7 +9,7 @@ import java.util.UUID;
  */
 public record GuestBookingResponse(
     Long id,
-    ServiceResponse service,
+    ServiceOfferingResponse serviceOffering,
     String customerName,
     String customerEmail,
     String customerPhone,

@@ -5,26 +5,26 @@ import fi.unfinitas.bookora.domain.enums.BookingStatus;
 import fi.unfinitas.bookora.domain.event.SendMailEvent;
 import fi.unfinitas.bookora.domain.model.Booking;
 import fi.unfinitas.bookora.domain.model.GuestAccessToken;
-import fi.unfinitas.bookora.domain.model.Service;
+import fi.unfinitas.bookora.domain.model.ServiceOffering;
 import fi.unfinitas.bookora.domain.model.User;
 import fi.unfinitas.bookora.dto.request.CreateGuestBookingRequest;
 import fi.unfinitas.bookora.dto.response.BookingResponse;
 import fi.unfinitas.bookora.dto.response.GuestBookingResponse;
 import fi.unfinitas.bookora.exception.BookingAlreadyCancelledException;
 import fi.unfinitas.bookora.exception.BookingAlreadyConfirmedException;
-import fi.unfinitas.bookora.exception.BookingNotFoundException;
 import fi.unfinitas.bookora.exception.CannotCancelBookingException;
+import fi.unfinitas.bookora.exception.CustomerBookingConflictException;
 import fi.unfinitas.bookora.exception.InvalidBookingTimeException;
-import fi.unfinitas.bookora.exception.InvalidTokenException;
 import fi.unfinitas.bookora.mapper.BookingMapper;
 import fi.unfinitas.bookora.repository.BookingRepository;
 import fi.unfinitas.bookora.service.BookingService;
 import fi.unfinitas.bookora.service.GuestAccessTokenService;
 import fi.unfinitas.bookora.service.GuestUserService;
-import fi.unfinitas.bookora.service.ServiceService;
+import fi.unfinitas.bookora.service.ServiceOfferingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
@@ -42,7 +42,7 @@ import java.util.UUID;
 public class BookingServiceImpl implements BookingService {
 
     private final BookingRepository bookingRepository;
-    private final ServiceService serviceService;
+    private final ServiceOfferingService serviceOfferingService;
     private final GuestUserService guestUserService;
     private final GuestAccessTokenService tokenService;
     private final BookingMapper bookingMapper;
@@ -56,9 +56,9 @@ public class BookingServiceImpl implements BookingService {
 
         validateBookingTimes(request.getStartTime(), request.getEndTime());
 
-        final Service service = serviceService.getServiceById(request.getServiceId());
+        final ServiceOffering serviceOffering = serviceOfferingService.getServiceOfferingById(request.getServiceId());
 
-        final UUID providerId = service.getProvider().getId();
+        final UUID providerId = serviceOffering.getProvider().getId();
         final boolean hasOverlap = bookingRepository.existsOverlappingBooking(
                 providerId,
                 request.getStartTime(),
@@ -80,27 +80,59 @@ public class BookingServiceImpl implements BookingService {
                 request.getPhoneNumber()
         );
 
+        final boolean hasCustomerOverlap = bookingRepository.existsCustomerOverlappingBooking(
+                guestUser.getId(),
+                request.getStartTime(),
+                request.getEndTime()
+        );
+
+        if (hasCustomerOverlap) {
+            log.warn("Customer {} already has a booking during {} - {}",
+                    guestUser.getEmail(), request.getStartTime(), request.getEndTime());
+            throw new CustomerBookingConflictException(
+                    "You already have a booking during this time. You cannot book multiple appointments at the same time."
+            );
+        }
+
         final Booking booking = Booking.builder()
                 .customer(guestUser)
-                .provider(service.getProvider())
-                .service(service)
+                .provider(serviceOffering.getProvider())
+                .serviceOffering(serviceOffering)
                 .startTime(request.getStartTime())
                 .endTime(request.getEndTime())
                 .status(BookingStatus.PENDING)
                 .notes(request.getNotes())
                 .build();
 
-        final Booking savedBooking = bookingRepository.save(booking);
-        log.debug("Booking created successfully with ID: {}", savedBooking.getId());
+        try {
+            final Booking savedBooking = bookingRepository.save(booking);
+            log.debug("Booking created successfully with ID: {}", savedBooking.getId());
 
-        final GuestAccessToken token = tokenService.generateToken(savedBooking);
+            final GuestAccessToken token = tokenService.generateToken(savedBooking);
 
-        final GuestBookingResponse response = bookingMapper.toGuestResponse(savedBooking, token);
-        log.debug("Guest booking completed. Booking ID: {}", savedBooking.getId());
+            final GuestBookingResponse response = bookingMapper.toGuestResponse(savedBooking, token);
+            log.debug("Guest booking completed. Booking ID: {}", savedBooking.getId());
 
-        publishSendMailEvent(response, service, savedBooking);
+            publishSendMailEvent(response, serviceOffering, savedBooking);
 
-        return response;
+            return response;
+        } catch (DataIntegrityViolationException e) {
+            if (isProviderOverlapConstraint(e)) {
+                log.warn("Race condition: provider booking overlap for provider {} at {} - {}",
+                        providerId, request.getStartTime(), request.getEndTime());
+                throw new InvalidBookingTimeException(
+                        "This time slot was just booked by another user. Please select a different time."
+                );
+            }
+            if (isCustomerOverlapConstraint(e)) {
+                log.warn("Race condition: customer booking overlap for customer {} at {} - {}",
+                        guestUser.getEmail(), request.getStartTime(), request.getEndTime());
+                throw new CustomerBookingConflictException(
+                        "You already have a booking during this time. You cannot book multiple appointments at the same time."
+                );
+            }
+            throw e;
+        }
     }
 
     @Override
@@ -108,18 +140,11 @@ public class BookingServiceImpl implements BookingService {
     public BookingResponse getBookingByToken(final UUID token) {
         log.debug("Retrieving booking by access token");
 
-        try {
-            final GuestAccessToken accessToken = tokenService.validateToken(token);
-            final Booking booking = accessToken.getBooking();
-            final BookingResponse response = bookingMapper.toResponse(booking);
+        final GuestAccessToken accessToken = tokenService.validateToken(token);
+        final Booking booking = accessToken.getBooking();
 
-            log.debug("Booking retrieved successfully. ID: {} Status: {}", booking.getId(), booking.getStatus());
-            return response;
-        } catch (final InvalidTokenException e) {
-            // Convert InvalidTokenException to BookingNotFoundException for GET endpoints
-            log.warn("Invalid token provided for booking retrieval: {}", e.getMessage());
-            throw new BookingNotFoundException("Booking not found with the provided token");
-        }
+        log.debug("Booking retrieved successfully. ID: {} Status: {}", booking.getId(), booking.getStatus());
+        return bookingMapper.toResponse(booking);
     }
 
     @Override
@@ -127,18 +152,17 @@ public class BookingServiceImpl implements BookingService {
     public BookingResponse confirmBookingByToken(final UUID token) {
         log.debug("Confirming booking");
 
-        final GuestAccessToken accessToken = tokenService.validateToken(token);
+        final GuestAccessToken accessToken = tokenService.validateTokenForConfirm(token);
         final Booking booking = accessToken.getBooking();
 
         validateBooking(booking);
 
         booking.setStatus(BookingStatus.CONFIRMED);
-        final Booking updatedBooking = bookingRepository.save(booking);
 
         accessToken.markAsConfirmed();
 
-        log.debug("Booking confirmed successfully. ID: {}", updatedBooking.getId());
-        return bookingMapper.toResponse(updatedBooking);
+        log.debug("Booking confirmed successfully. ID: {}", booking.getId());
+        return bookingMapper.toResponse(booking);
     }
 
     @Override
@@ -151,18 +175,24 @@ public class BookingServiceImpl implements BookingService {
 
         validateStatus(booking);
 
-        // Check if cancellation is within 24 hours of booking start time
+        // Check if cancellation is within configured hours of booking start time
+        final int cancellationWindowHours = bookoraProperties.getGuest().getBooking().getCancellationWindowHours();
         final LocalDateTime now = LocalDateTime.now();
-        final LocalDateTime cancellationDeadline = booking.getStartTime().minusHours(24);
+        final LocalDateTime cancellationDeadline = booking.getStartTime().minusHours(cancellationWindowHours);
 
         if (now.isAfter(cancellationDeadline)) {
-            log.warn("Cannot cancel booking {} within 24 hours of start time. Deadline: {}, Now: {}",
-                    booking.getId(), cancellationDeadline, now);
-            throw new CannotCancelBookingException("Cannot cancel booking within 24 hours of start time.");
+            log.warn("Cannot cancel booking {} within {} hours of start time. Deadline: {}, Now: {}",
+                    booking.getId(), cancellationWindowHours, cancellationDeadline, now);
+            throw new CannotCancelBookingException(
+                    String.format("Cannot cancel booking within %d hours of start time.", cancellationWindowHours)
+            );
         }
 
         booking.setStatus(BookingStatus.CANCELLED);
         final Booking updatedBooking = bookingRepository.save(booking);
+
+        // Revoke token to prevent further access
+        accessToken.softDelete("BOOKING_CANCELLED");
 
         log.debug("Booking cancelled successfully. ID: {}", updatedBooking.getId());
 
@@ -175,7 +205,7 @@ public class BookingServiceImpl implements BookingService {
 
             final SendMailEvent event = new SendMailEvent(
                     response.customerEmail(),
-                    "Booking Cancelled - " + updatedBooking.getService().getName(),
+                    "Booking Cancelled - " + updatedBooking.getServiceOffering().getName(),
                     "email/booking-cancelled",
                     templateVariables
             );
@@ -189,36 +219,7 @@ public class BookingServiceImpl implements BookingService {
         return bookingMapper.toResponse(updatedBooking);
     }
 
-    @Override
-    @Transactional
-    public BookingResponse validateAndConfirmBooking(final UUID token) {
-        log.debug("Validating token and auto-confirming booking if pending");
-
-        // Validate token exists and not expired
-        final GuestAccessToken accessToken = tokenService.validateToken(token);
-        final Booking booking = accessToken.getBooking();
-
-        log.debug("Token validated. Booking ID: {}, Status: {}", booking.getId(), booking.getStatus());
-
-        // Auto-confirm only if status is PENDING
-        if (booking.getStatus() == BookingStatus.PENDING) {
-            log.debug("Booking is PENDING. Auto-confirming to CONFIRMED");
-            booking.setStatus(BookingStatus.CONFIRMED);
-            bookingRepository.save(booking);
-
-            // Mark token as confirmed (JPA will auto-persist the change)
-            accessToken.markAsConfirmed();
-
-            log.info("Booking auto-confirmed successfully. ID: {}", booking.getId());
-        } else {
-            // If already CONFIRMED or CANCELLED, return current status (idempotent)
-            log.debug("Booking status is {}. Returning current status without modification", booking.getStatus());
-        }
-
-        return bookingMapper.toResponse(booking);
-    }
-
-    private void publishSendMailEvent(final GuestBookingResponse response, final Service service, final Booking savedBooking) {
+    private void publishSendMailEvent(final GuestBookingResponse response, final ServiceOffering serviceOffering, final Booking savedBooking) {
         try {
             final Map<String, Object> templateVariables = new HashMap<>();
             templateVariables.put("booking", response);
@@ -226,7 +227,7 @@ public class BookingServiceImpl implements BookingService {
 
             final SendMailEvent event = new SendMailEvent(
                     response.customerEmail(),
-                    "Booking Confirmation - " + service.getName(),
+                    "Booking Confirmation - " + serviceOffering.getName(),
                     "email/booking-created",
                     templateVariables
             );
@@ -277,5 +278,23 @@ public class BookingServiceImpl implements BookingService {
         }
 
         log.debug("Booking times validated: {} - {}", startTime, endTime);
+    }
+
+    private boolean isProviderOverlapConstraint(DataIntegrityViolationException e) {
+        final Throwable rootCause = e.getRootCause();
+        if (rootCause == null) {
+            return false;
+        }
+        final String message = rootCause.getMessage();
+        return message != null && message.contains("idx_no_overlapping_bookings");
+    }
+
+    private boolean isCustomerOverlapConstraint(DataIntegrityViolationException e) {
+        final Throwable rootCause = e.getRootCause();
+        if (rootCause == null) {
+            return false;
+        }
+        final String message = rootCause.getMessage();
+        return message != null && message.contains("idx_no_overlapping_customer_bookings");
     }
 }

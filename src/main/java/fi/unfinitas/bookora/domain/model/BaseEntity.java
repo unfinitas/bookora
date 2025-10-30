@@ -11,10 +11,6 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.LocalDateTime;
 
-/**
- * Base entity class for common auditing fields.
- * All entities should extend this class to automatically track creation and modification timestamps.
- */
 @MappedSuperclass
 @EntityListeners(AuditingEntityListener.class)
 @Getter
@@ -28,4 +24,19 @@ public abstract class BaseEntity {
     @LastModifiedDate
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+
+    @Column(name = "deleted_by", length = 255)
+    private String deletedBy;
+
+    public boolean isDeleted() {
+        return deletedAt != null;
+    }
+
+    public void softDelete(final String deletedBy) {
+        this.deletedAt = LocalDateTime.now();
+        this.deletedBy = deletedBy;
+    }
 }

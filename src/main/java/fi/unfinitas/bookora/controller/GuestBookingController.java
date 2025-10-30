@@ -92,13 +92,13 @@ public class GuestBookingController {
     /**
      * Cancel booking by access token.
      * Sets booking status to CANCELLED.
-     * Can only be cancelled up to 24 hours before booking start time.
+     * Can only be cancelled before the configured cancellation window (default: 24 hours before booking start time).
      * Token can still be used to view the cancelled booking.
      *
      * @param token the UUID access token
      * @return updated booking with CANCELLED status
      */
-    @DeleteMapping("/{token}")
+    @PatchMapping("/{token}")
     public ResponseEntity<ApiResponse<BookingResponse>> cancelBookingByToken(
             @PathVariable final UUID token) {
         final BookingResponse response = bookingService.cancelBookingByToken(token);

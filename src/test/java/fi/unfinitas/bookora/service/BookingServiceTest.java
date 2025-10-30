@@ -10,6 +10,7 @@ import fi.unfinitas.bookora.exception.*;
 import fi.unfinitas.bookora.mapper.BookingMapper;
 import fi.unfinitas.bookora.repository.BookingRepository;
 import fi.unfinitas.bookora.service.impl.BookingServiceImpl;
+import jakarta.persistence.OptimisticLockException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -35,7 +36,7 @@ class BookingServiceTest {
     private BookingRepository bookingRepository;
 
     @Mock
-    private ServiceService serviceService;
+    private ServiceOfferingService serviceOfferingService;
 
     @Mock
     private GuestUserService guestUserService;
@@ -56,7 +57,7 @@ class BookingServiceTest {
     private BookingServiceImpl bookingService;
 
     private CreateGuestBookingRequest validRequest;
-    private Service testService;
+    private ServiceOffering testServiceOffering;
     private User guestUser;
     private Booking testBooking;
     private GuestAccessToken testToken;
@@ -80,7 +81,7 @@ class BookingServiceTest {
                 .businessName("Test Business")
                 .build();
 
-        testService = Service.builder()
+        testServiceOffering = ServiceOffering.builder()
                 .id(1L)
                 .provider(testProvider)
                 .build();
@@ -93,7 +94,7 @@ class BookingServiceTest {
                 .id(1L)
                 .customer(guestUser)
                 .provider(testProvider)
-                .service(testService)
+                .serviceOffering(testServiceOffering)
                 .startTime(validRequest.getStartTime())
                 .endTime(validRequest.getEndTime())
                 .status(BookingStatus.PENDING)
@@ -104,16 +105,24 @@ class BookingServiceTest {
                 .booking(testBooking)
                 .build();
 
-        // Stub BookoraProperties for event publishing (lenient to avoid UnnecessaryStubbingException)
+        // Stub BookoraProperties for event publishing and booking configuration (lenient to avoid UnnecessaryStubbingException)
         lenient().when(bookoraProperties.getFrontendUrl()).thenReturn("http://localhost:3000");
+
+        // Mock nested properties for booking cancellation window
+        final BookoraProperties.Guest guestProperties = mock(BookoraProperties.Guest.class);
+        final BookoraProperties.Guest.Booking bookingProperties = mock(BookoraProperties.Guest.Booking.class);
+        lenient().when(bookoraProperties.getGuest()).thenReturn(guestProperties);
+        lenient().when(guestProperties.getBooking()).thenReturn(bookingProperties);
+        lenient().when(bookingProperties.getCancellationWindowHours()).thenReturn(24);
     }
 
     @Test
     @DisplayName("Should create guest booking successfully")
     void shouldCreateGuestBookingSuccessfully() {
-        when(serviceService.getServiceById(1L)).thenReturn(testService);
+        when(serviceOfferingService.getServiceOfferingById(1L)).thenReturn(testServiceOffering);
         when(bookingRepository.existsOverlappingBooking(any(), any(), any())).thenReturn(false);
         when(guestUserService.findOrCreateGuestUser(any(), any(), any(), any())).thenReturn(guestUser);
+        when(bookingRepository.existsCustomerOverlappingBooking(any(), any(), any())).thenReturn(false);
         when(bookingRepository.save(any(Booking.class))).thenReturn(testBooking);
         when(tokenService.generateToken(any(Booking.class))).thenReturn(testToken);
         when(bookingMapper.toGuestResponse(any(Booking.class), any(GuestAccessToken.class)))
@@ -122,7 +131,7 @@ class BookingServiceTest {
         final GuestBookingResponse result = bookingService.createGuestBooking(validRequest);
 
         assertThat(result).isNotNull();
-        verify(serviceService).getServiceById(1L);
+        verify(serviceOfferingService).getServiceOfferingById(1L);
         verify(bookingRepository).existsOverlappingBooking(any(), any(), any());
         verify(guestUserService).findOrCreateGuestUser(
                 validRequest.getEmail(),
@@ -130,21 +139,22 @@ class BookingServiceTest {
                 validRequest.getLastName(),
                 validRequest.getPhoneNumber()
         );
+        verify(bookingRepository).existsCustomerOverlappingBooking(any(), any(), any());
         verify(bookingRepository).save(any(Booking.class));
         verify(tokenService).generateToken(any(Booking.class));
     }
 
     @Test
-    @DisplayName("Should throw exception when service not found")
-    void shouldThrowExceptionWhenServiceNotFound() {
-        when(serviceService.getServiceById(1L))
-                .thenThrow(new ServiceNotFoundException("Service not found with ID: 1"));
+    @DisplayName("Should throw exception when service offering not found")
+    void shouldThrowExceptionWhenServiceOfferingNotFound() {
+        when(serviceOfferingService.getServiceOfferingById(1L))
+                .thenThrow(new ServiceOfferingNotFoundException("Service offering not found with ID: 1"));
 
         assertThatThrownBy(() -> bookingService.createGuestBooking(validRequest))
-                .isInstanceOf(ServiceNotFoundException.class)
-                .hasMessageContaining("Service not found");
+                .isInstanceOf(ServiceOfferingNotFoundException.class)
+                .hasMessageContaining("Service offering not found");
 
-        verify(serviceService).getServiceById(1L);
+        verify(serviceOfferingService).getServiceOfferingById(1L);
         verify(bookingRepository, never()).save(any());
     }
 
@@ -164,7 +174,7 @@ class BookingServiceTest {
                 .isInstanceOf(InvalidBookingTimeException.class)
                 .hasMessageContaining("past");
 
-        verify(serviceService, never()).getServiceById(any());
+        verify(serviceOfferingService, never()).getServiceOfferingById(any());
     }
 
     @Test
@@ -183,7 +193,7 @@ class BookingServiceTest {
                 .isInstanceOf(InvalidBookingTimeException.class)
                 .hasMessageContaining("end time must be after start time");
 
-        verify(serviceService, never()).getServiceById(any());
+        verify(serviceOfferingService, never()).getServiceOfferingById(any());
     }
 
     @Test
@@ -203,13 +213,13 @@ class BookingServiceTest {
                 .isInstanceOf(InvalidBookingTimeException.class)
                 .hasMessageContaining("end time must be after start time");
 
-        verify(serviceService, never()).getServiceById(any());
+        verify(serviceOfferingService, never()).getServiceOfferingById(any());
     }
 
     @Test
     @DisplayName("Should throw exception when overlapping booking exists")
     void shouldThrowExceptionWhenOverlappingBookingExists() {
-        when(serviceService.getServiceById(1L)).thenReturn(testService);
+        when(serviceOfferingService.getServiceOfferingById(1L)).thenReturn(testServiceOffering);
         when(bookingRepository.existsOverlappingBooking(any(), any(), any())).thenReturn(true);
 
         assertThatThrownBy(() -> bookingService.createGuestBooking(validRequest))
@@ -217,6 +227,24 @@ class BookingServiceTest {
                 .hasMessageContaining("already booked");
 
         verify(bookingRepository).existsOverlappingBooking(any(), any(), any());
+        verify(bookingRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Should throw exception when customer has overlapping booking")
+    void shouldThrowExceptionWhenCustomerHasOverlappingBooking() {
+        when(serviceOfferingService.getServiceOfferingById(1L)).thenReturn(testServiceOffering);
+        when(bookingRepository.existsOverlappingBooking(any(), any(), any())).thenReturn(false);
+        when(guestUserService.findOrCreateGuestUser(any(), any(), any(), any())).thenReturn(guestUser);
+        when(bookingRepository.existsCustomerOverlappingBooking(any(), any(), any())).thenReturn(true);
+
+        assertThatThrownBy(() -> bookingService.createGuestBooking(validRequest))
+                .isInstanceOf(CustomerBookingConflictException.class)
+                .hasMessageContaining("already have a booking during this time");
+
+        verify(bookingRepository).existsOverlappingBooking(any(), any(), any());
+        verify(guestUserService).findOrCreateGuestUser(any(), any(), any(), any());
+        verify(bookingRepository).existsCustomerOverlappingBooking(any(), any(), any());
         verify(bookingRepository, never()).save(any());
     }
 
@@ -236,10 +264,39 @@ class BookingServiceTest {
     }
 
     @Test
+    @DisplayName("Should throw InvalidTokenException when token is not found")
+    void shouldThrowInvalidTokenExceptionWhenTokenNotFound() {
+        final UUID token = UUID.randomUUID();
+        when(tokenService.validateToken(token))
+                .thenThrow(new InvalidTokenException("Token not found"));
+
+        assertThatThrownBy(() -> bookingService.getBookingByToken(token))
+                .isInstanceOf(InvalidTokenException.class)
+                .hasMessageContaining("Token not found");
+
+        verify(tokenService).validateToken(token);
+        verify(bookingMapper, never()).toResponse(any());
+    }
+
+    @Test
+    @DisplayName("Should throw TokenExpiredException when token is expired")
+    void shouldThrowTokenExpiredExceptionWhenTokenExpired() {
+        final UUID token = UUID.randomUUID();
+        when(tokenService.validateToken(token))
+                .thenThrow(new TokenExpiredException("Token expired"));
+
+        assertThatThrownBy(() -> bookingService.getBookingByToken(token))
+                .isInstanceOf(TokenExpiredException.class)
+                .hasMessageContaining("Token expired");
+
+        verify(tokenService).validateToken(token);
+        verify(bookingMapper, never()).toResponse(any());
+    }
+
+    @Test
     @DisplayName("Should cancel booking successfully")
     void shouldCancelBookingSuccessfully() {
         final UUID token = UUID.randomUUID();
-        // Set booking start time to more than 24 hours from now
         testBooking.setStartTime(LocalDateTime.now().plusDays(2));
         testToken.setBooking(testBooking);
         when(tokenService.validateToken(token)).thenReturn(testToken);
@@ -262,8 +319,7 @@ class BookingServiceTest {
         testBooking.setStartTime(LocalDateTime.now().plusDays(1));
         testToken.setBooking(testBooking);
 
-        when(tokenService.validateToken(token)).thenReturn(testToken);
-        when(bookingRepository.save(any(Booking.class))).thenReturn(testBooking);
+        when(tokenService.validateTokenForConfirm(token)).thenReturn(testToken);
         when(bookingMapper.toResponse(any(Booking.class))).thenReturn(mock(BookingResponse.class));
 
         final BookingResponse result = bookingService.confirmBookingByToken(token);
@@ -271,8 +327,7 @@ class BookingServiceTest {
         assertThat(result).isNotNull();
         assertThat(testBooking.getStatus()).isEqualTo(BookingStatus.CONFIRMED);
         assertThat(testToken.getConfirmedAt()).isNotNull(); // Verify token was marked as confirmed
-        verify(tokenService).validateToken(token);
-        verify(bookingRepository).save(testBooking);
+        verify(tokenService).validateTokenForConfirm(token);
     }
 
     @Test
@@ -282,13 +337,13 @@ class BookingServiceTest {
         testBooking.setStatus(BookingStatus.CONFIRMED);
         testToken.setBooking(testBooking);
 
-        when(tokenService.validateToken(token)).thenReturn(testToken);
+        when(tokenService.validateTokenForConfirm(token)).thenReturn(testToken);
 
         assertThatThrownBy(() -> bookingService.confirmBookingByToken(token))
                 .isInstanceOf(BookingAlreadyConfirmedException.class)
                 .hasMessageContaining("Booking has already been confirmed");
 
-        verify(tokenService).validateToken(token);
+        verify(tokenService).validateTokenForConfirm(token);
         verify(bookingRepository, never()).save(any());
     }
 
@@ -299,13 +354,13 @@ class BookingServiceTest {
         testBooking.setStatus(BookingStatus.CANCELLED);
         testToken.setBooking(testBooking);
 
-        when(tokenService.validateToken(token)).thenReturn(testToken);
+        when(tokenService.validateTokenForConfirm(token)).thenReturn(testToken);
 
         assertThatThrownBy(() -> bookingService.confirmBookingByToken(token))
                 .isInstanceOf(BookingAlreadyCancelledException.class)
                 .hasMessageContaining("cancelled");
 
-        verify(tokenService).validateToken(token);
+        verify(tokenService).validateTokenForConfirm(token);
         verify(bookingRepository, never()).save(any());
     }
 
@@ -317,13 +372,13 @@ class BookingServiceTest {
         testBooking.setStartTime(LocalDateTime.now().minusHours(1));
         testToken.setBooking(testBooking);
 
-        when(tokenService.validateToken(token)).thenReturn(testToken);
+        when(tokenService.validateTokenForConfirm(token)).thenReturn(testToken);
 
         assertThatThrownBy(() -> bookingService.confirmBookingByToken(token))
                 .isInstanceOf(InvalidBookingTimeException.class)
                 .hasMessageContaining("already started");
 
-        verify(tokenService).validateToken(token);
+        verify(tokenService).validateTokenForConfirm(token);
         verify(bookingRepository, never()).save(any());
     }
 
@@ -380,5 +435,29 @@ class BookingServiceTest {
         assertThat(testBooking.getStatus()).isEqualTo(BookingStatus.CANCELLED);
         verify(tokenService).validateToken(token);
         verify(bookingRepository).save(testBooking);
+    }
+
+    @Test
+    @DisplayName("Should propagate OptimisticLockException when modifying booking with stale version")
+    void shouldPropagateOptimisticLockExceptionWhenCancellingBooking() {
+        final UUID token = UUID.randomUUID();
+        testBooking.setStatus(BookingStatus.PENDING);
+        testBooking.setStartTime(LocalDateTime.now().plusDays(2)); // More than 24 hours
+        testToken.setBooking(testBooking);
+
+        when(tokenService.validateToken(token)).thenReturn(testToken);
+        when(bookoraProperties.getGuest()).thenReturn(mock(BookoraProperties.Guest.class));
+        when(bookoraProperties.getGuest().getBooking()).thenReturn(mock(BookoraProperties.Guest.Booking.class));
+        when(bookoraProperties.getGuest().getBooking().getCancellationWindowHours()).thenReturn(24);
+        when(bookingRepository.save(any(Booking.class))).thenThrow(
+                new OptimisticLockException("Booking was modified by another transaction")
+        );
+
+        assertThatThrownBy(() -> bookingService.cancelBookingByToken(token))
+                .isInstanceOf(OptimisticLockException.class)
+                .hasMessageContaining("modified by another transaction");
+
+        verify(tokenService).validateToken(token);
+        verify(bookingRepository).save(any(Booking.class));
     }
 }

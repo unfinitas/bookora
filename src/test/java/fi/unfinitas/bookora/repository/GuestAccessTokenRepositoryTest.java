@@ -34,8 +34,8 @@ class GuestAccessTokenRepositoryTest {
         final Provider provider = TestDataBuilder.provider().user(providerUser).build();
         entityManager.persist(provider);
 
-        final Service service = TestDataBuilder.service().provider(provider).build();
-        entityManager.persist(service);
+        final ServiceOffering serviceOffering = TestDataBuilder.serviceOffering().provider(provider).build();
+        entityManager.persist(serviceOffering);
 
         final User customer = TestDataBuilder.guestUser().build();
         entityManager.persist(customer);
@@ -43,7 +43,7 @@ class GuestAccessTokenRepositoryTest {
         final Booking booking = TestDataBuilder.booking()
             .customer(customer)
             .provider(provider)
-            .service(service)
+            .serviceOffering(serviceOffering)
             .build();
         entityManager.persist(booking);
 
@@ -80,8 +80,8 @@ class GuestAccessTokenRepositoryTest {
         final Provider provider = TestDataBuilder.provider().user(providerUser).build();
         entityManager.persist(provider);
 
-        final Service service = TestDataBuilder.service().provider(provider).build();
-        entityManager.persist(service);
+        final ServiceOffering serviceOffering = TestDataBuilder.serviceOffering().provider(provider).build();
+        entityManager.persist(serviceOffering);
 
         final User customer = TestDataBuilder.guestUser().build();
         entityManager.persist(customer);
@@ -89,7 +89,7 @@ class GuestAccessTokenRepositoryTest {
         final Booking booking = TestDataBuilder.booking()
             .customer(customer)
             .provider(provider)
-            .service(service)
+            .serviceOffering(serviceOffering)
             .build();
         final Booking savedBooking = entityManager.persist(booking);
 
@@ -114,8 +114,8 @@ class GuestAccessTokenRepositoryTest {
         final Provider provider = TestDataBuilder.provider().user(providerUser).build();
         entityManager.persist(provider);
 
-        final Service service = TestDataBuilder.service().provider(provider).build();
-        entityManager.persist(service);
+        final ServiceOffering serviceOffering = TestDataBuilder.serviceOffering().provider(provider).build();
+        entityManager.persist(serviceOffering);
 
         final User customer = TestDataBuilder.guestUser().build();
         entityManager.persist(customer);
@@ -123,7 +123,7 @@ class GuestAccessTokenRepositoryTest {
         final Booking booking = TestDataBuilder.booking()
             .customer(customer)
             .provider(provider)
-            .service(service)
+            .serviceOffering(serviceOffering)
             .build();
         final Booking savedBooking = entityManager.persistAndFlush(booking);
 
@@ -142,8 +142,8 @@ class GuestAccessTokenRepositoryTest {
         final Provider provider = TestDataBuilder.provider().user(providerUser).build();
         entityManager.persist(provider);
 
-        final Service service = TestDataBuilder.service().provider(provider).build();
-        entityManager.persist(service);
+        final ServiceOffering serviceOffering = TestDataBuilder.serviceOffering().provider(provider).build();
+        entityManager.persist(serviceOffering);
 
         final User customer = TestDataBuilder.guestUser().build();
         entityManager.persist(customer);
@@ -151,7 +151,7 @@ class GuestAccessTokenRepositoryTest {
         final Booking booking = TestDataBuilder.booking()
             .customer(customer)
             .provider(provider)
-            .service(service)
+            .serviceOffering(serviceOffering)
             .build();
         entityManager.persist(booking);
 
