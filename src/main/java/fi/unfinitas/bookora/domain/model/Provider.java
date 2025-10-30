@@ -2,12 +2,11 @@ package fi.unfinitas.bookora.domain.model;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.SQLRestriction;
 
 import java.util.UUID;
 
-/**
- * Provider entity representing service providers in the system.
- */
 @Entity
 @Getter
 @Setter
@@ -15,9 +14,9 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 @EqualsAndHashCode(of = "id", callSuper = false)
-@Table(name = "t_provider", uniqueConstraints = {
-        @UniqueConstraint(name = "uq_provider_user_id", columnNames = "user_id")
-})
+@Table(name = "t_provider")
+@SQLRestriction("deleted_at IS NULL")
+@SQLDelete(sql = "UPDATE t_provider SET deleted_at = NOW(), updated_at = NOW() WHERE id = ?")
 public class Provider extends BaseEntity {
 
     @Id

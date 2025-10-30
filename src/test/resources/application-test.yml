@@ -1,0 +1,105 @@
+# Test Environment Configuration
+spring:
+  application:
+    name: bookora-test
+
+  # Database Configuration (Testcontainers - auto-configured via @ServiceConnection)
+  # No datasource configuration needed - Testcontainers auto-configures PostgreSQL
+
+  # JPA/Hibernate Configuration (Test)
+  jpa:
+    hibernate:
+      ddl-auto: create-drop  # Recreate schema for each test run
+    show-sql: false          # Reduce noise in test output
+    properties:
+      hibernate:
+        default_schema: public
+        format_sql: false
+        jdbc:
+          batch_size: 20
+        order_inserts: true
+        order_updates: true
+    open-in-view: false
+
+  # Flyway Configuration (disabled for tests - using ddl-auto: create-drop)
+  flyway:
+    enabled: false
+
+  # Security
+  security:
+    filter:
+      order: 10
+
+  # Mail Configuration (disabled for tests)
+  mail:
+    host: localhost
+    port: 1025
+    properties:
+      mail:
+        smtp:
+          auth: false
+          starttls:
+            enable: false
+
+# Server Configuration
+server:
+  port: 0  # Random port for tests
+  servlet:
+    context-path: /api
+  error:
+    include-message: always
+    include-binding-errors: always
+    include-stacktrace: on_param
+    include-exception: false
+
+# Actuator Configuration
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: always
+  health:
+    defaults:
+      enabled: true
+
+# Logging Configuration (Test)
+logging:
+  level:
+    root: WARN
+    fi.unfinitas.bookora: DEBUG
+    org.springframework.test: INFO
+    org.springframework.web: INFO
+    org.testcontainers: INFO
+    org.hibernate.SQL: OFF
+    org.hibernate.type: OFF
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+# Springdoc OpenAPI Configuration (disabled for tests)
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+# JWT Configuration (Test)
+jwt:
+  secret: test-secret-key-for-testing-only-not-for-production-must-be-at-least-256-bits
+  expiration: 86400000 # 24 hours in milliseconds
+  refresh-expiration: 604800000 # 7 days in milliseconds
+
+# Bookora Application Configuration (Test)
+bookora:
+  frontend-url: http://localhost:3000
+  email:
+    from: test@bookora.test
+    enabled: false  # Email disabled for tests
+  guest:
+    token:
+      expiration-extension-days: 30
+    booking:
+      cancellation-window-hours: 24

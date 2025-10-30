@@ -42,12 +42,14 @@ erDiagram
         string first_name
         string last_name
         string email UK "uq_user_email"
-        string password
-        string role "GUEST, CUSTOMER, PROVIDER"
+        string password "nullable for guest users"
+        string role "USER, PROVIDER, ADMIN"
         boolean is_guest
         string phone_number
         timestamp created_at
         timestamp updated_at
+        timestamp deleted_at "soft delete"
+        uuid deleted_by "soft delete"
     }
 
     t_provider {
@@ -59,6 +61,8 @@ erDiagram
         boolean is_verified
         timestamp created_at
         timestamp updated_at
+        timestamp deleted_at "soft delete"
+        uuid deleted_by "soft delete"
     }
 
     t_address {
@@ -70,6 +74,8 @@ erDiagram
         string country
         timestamp created_at
         timestamp updated_at
+        timestamp deleted_at "soft delete"
+        uuid deleted_by "soft delete"
     }
 
     t_service {
@@ -80,8 +86,11 @@ erDiagram
         integer duration_minutes
         decimal price
         boolean is_active
+        bigint version "optimistic locking"
         timestamp created_at
         timestamp updated_at
+        timestamp deleted_at "soft delete"
+        uuid deleted_by "soft delete"
     }
 
     t_booking {
@@ -93,8 +102,11 @@ erDiagram
         timestamp end_time
         string status "PENDING, CONFIRMED, CANCELLED, COMPLETED"
         text notes
+        bigint version "optimistic locking"
         timestamp created_at
         timestamp updated_at
+        timestamp deleted_at "soft delete"
+        uuid deleted_by "soft delete"
     }
 
     t_availability {
@@ -106,6 +118,8 @@ erDiagram
         boolean is_available
         timestamp created_at
         timestamp updated_at
+        timestamp deleted_at "soft delete"
+        uuid deleted_by "soft delete"
     }
 
     t_guest_access_token {
@@ -113,9 +127,12 @@ erDiagram
         bigint booking_id FK,UK "uq_guest_access_token_booking_id"
         uuid token UK "uq_guest_access_token_token"
         timestamp expires_at
-        timestamp used_at
+        timestamp confirmed_at
+        bigint version "optimistic locking"
         timestamp created_at
         timestamp updated_at
+        timestamp deleted_at "soft delete"
+        uuid deleted_by "soft delete"
     }
 ```
 
@@ -125,25 +142,44 @@ erDiagram
 - **User-Booking**: One-to-many. A customer (user) can make multiple bookings.
 - **Provider-Service**: One-to-many. A provider offers multiple services.
 - **Provider-Booking**: One-to-many. A provider receives multiple bookings.
-- **Provider-Availability**: One-to-many. A provider defines multiple availability time.
+- **Provider-Availability**: One-to-many. A provider defines multiple availability time slots.
 - **Provider-Address**: Many-to-one. Multiple providers can share the same address (co-working spaces, business centers).
 - **Service-Booking**: One-to-many. A service can be booked multiple times.
-- **Booking-GuestAccessToken**: One-to-one. Each booking can have a guest access token.
+- **Booking-GuestAccessToken**: One-to-one. Each booking can have a guest access token for guest users.
 
-### Notes
+### Schema Features
 
-- **Address**: Separate entity table for reusability, historical tracking, and efficient querying
+- **Soft Deletes**: All entities support soft deletion using `deleted_at` and `deleted_by` columns
+  - Enables data retention and audit trail
+  - @SQLRestriction automatically filters deleted records in queries
+- **Optimistic Locking**: `version` column on `t_booking`, `t_service`, and `t_guest_access_token`
+  - Prevents lost updates in concurrent scenarios
+  - Uses @Version annotation for JPA-managed versioning
+- **Guest User Support**:
+  - `is_guest` flag distinguishes guest vs registered users
+  - Guest users have nullable `password` field
+  - Database constraint ensures guests cannot have passwords
+- **Booking Conflict Prevention**:
+  - Temporal range exclusion constraint prevents overlapping provider bookings
+  - Customer exclusion constraint prevents double-booking for customers
+  - Application-level + database-level validation for data integrity
+- **Address Reusability**: Separate entity table for sharing addresses
   - Multiple providers can share the same address (co-working spaces, business centers)
-  - Enables address history tracking via BaseEntity timestamps
+  - Enables address history tracking via audit timestamps
   - Supports efficient location-based queries with indexed city/country columns
-- **UserRole**: Enum (GUEST, CUSTOMER, PROVIDER)
-- **BookingStatus**: Enum (PENDING, CONFIRMED, CANCELLED, COMPLETED)
-- **Naming Conventions**:
-  - Tables: `t_<entity>` prefix
-  - Columns: `snake_case`
-  - Boolean columns: `is_<name>` prefix
-  - Timestamp columns: `<action>_at` suffix
-  - Unique constraints: `uq_<table>_<column>`
+
+### Enums
+
+- **UserRole**: `USER`, `PROVIDER`, `ADMIN`
+- **BookingStatus**: `PENDING`, `CONFIRMED`, `CANCELLED`, `COMPLETED`
+
+### Naming Conventions
+
+- Tables: `t_<entity>` prefix
+- Columns: `snake_case`
+- Boolean columns: `is_<name>` prefix
+- Timestamp columns: `<action>_at` suffix
+- Unique constraints: `uq_<table>_<column>`
 
 ## Project Structure
 
