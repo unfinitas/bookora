@@ -17,7 +17,7 @@ import java.util.UUID;
 @EqualsAndHashCode(of = "id", callSuper = false)
 @Table(name = "t_guest_access_token")
 @SQLRestriction("deleted_at IS NULL")
-@SQLDelete(sql = "UPDATE t_guest_access_token SET deleted_at = NOW(), updated_at = NOW() WHERE id = ?")
+@SQLDelete(sql = "UPDATE t_guest_access_token SET deleted_at = NOW(), updated_at = NOW() WHERE id = ? AND version = ?")
 public class GuestAccessToken extends VersionedBaseEntity {
 
     @Id

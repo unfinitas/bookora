@@ -74,7 +74,7 @@ public class GuestUserService {
      * @return generated username
      */
     private String generateGuestUsername(final String email) {
-        final String emailPrefix = email.split("@")[0];
+        final String emailPrefix = email.split("@")[0].replaceAll("[^a-zA-Z0-9]", "_");
         final String uniqueSuffix = UUID.randomUUID().toString().substring(0, 8);
         return "guest_" + emailPrefix + "_" + uniqueSuffix;
     }

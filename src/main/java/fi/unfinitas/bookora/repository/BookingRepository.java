@@ -40,6 +40,7 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
      * @return true if there is an overlapping booking, false otherwise
      */
     @Query("SELECT COUNT(b) > 0 FROM Booking b WHERE b.provider.id = :providerId " +
+            "AND b.deletedAt IS NULL " +
             "AND b.status IN ('PENDING', 'CONFIRMED') " +
             "AND ((b.startTime < :endTime AND b.endTime > :startTime))")
     boolean existsOverlappingBooking(
@@ -59,6 +60,7 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
      * @return true if there is an overlapping booking, false otherwise
      */
     @Query("SELECT COUNT(b) > 0 FROM Booking b WHERE b.customer.id = :customerId " +
+            "AND b.deletedAt IS NULL " +
             "AND b.status IN ('PENDING', 'CONFIRMED') " +
             "AND ((b.startTime < :endTime AND b.endTime > :startTime))")
     boolean existsCustomerOverlappingBooking(

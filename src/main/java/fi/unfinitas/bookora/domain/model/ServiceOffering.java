@@ -16,7 +16,7 @@ import java.math.BigDecimal;
 @Builder
 @EqualsAndHashCode(of = "id", callSuper = false)
 @SQLRestriction("deleted_at IS NULL")
-@SQLDelete(sql = "UPDATE t_service SET deleted_at = NOW(), updated_at = NOW() WHERE id = ?")
+@SQLDelete(sql = "UPDATE t_service SET deleted_at = NOW(), updated_at = NOW() WHERE id = ? AND version = ?")
 public class ServiceOffering extends VersionedBaseEntity {
 
     @Id
