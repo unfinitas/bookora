@@ -2,12 +2,11 @@ package fi.unfinitas.bookora.domain.model;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.SQLRestriction;
 
 import java.math.BigDecimal;
 
-/**
- * Service entity representing services offered by providers.
- */
 @Entity
 @Table(name = "t_service")
 @Getter
@@ -16,7 +15,9 @@ import java.math.BigDecimal;
 @AllArgsConstructor
 @Builder
 @EqualsAndHashCode(of = "id", callSuper = false)
-public class Service extends BaseEntity {
+@SQLRestriction("deleted_at IS NULL")
+@SQLDelete(sql = "UPDATE t_service SET deleted_at = NOW(), updated_at = NOW() WHERE id = ? AND version = ?")
+public class ServiceOffering extends VersionedBaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

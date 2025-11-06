@@ -21,6 +21,7 @@ public interface UserMapper {
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "password", ignore = true)
     @Mapping(target = "isGuest", constant = "false")
+    @Mapping(target = "role", constant = "USER")
     User toEntity(RegisterRequest request);
 
 

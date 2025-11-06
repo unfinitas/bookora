@@ -2,13 +2,12 @@ package fi.unfinitas.bookora.domain.model;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.SQLRestriction;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-/**
- * GuestAccessToken entity for providing temporary access to bookings for guest users.
- */
 @Entity
 @Getter
 @Setter
@@ -16,11 +15,10 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 @EqualsAndHashCode(of = "id", callSuper = false)
-@Table(name = "t_guest_access_token", uniqueConstraints = {
-        @UniqueConstraint(name = "uq_guest_access_token_token", columnNames = "token"),
-        @UniqueConstraint(name = "uq_guest_access_token_booking_id", columnNames = "booking_id")
-})
-public class GuestAccessToken extends BaseEntity {
+@Table(name = "t_guest_access_token")
+@SQLRestriction("deleted_at IS NULL")
+@SQLDelete(sql = "UPDATE t_guest_access_token SET deleted_at = NOW(), updated_at = NOW() WHERE id = ? AND version = ?")
+public class GuestAccessToken extends VersionedBaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -36,9 +34,9 @@ public class GuestAccessToken extends BaseEntity {
     @Column(name = "expires_at", nullable = false)
     private LocalDateTime expiresAt;
 
-    @Column(name = "used_at")
+    @Column(name = "confirmed_at")
     @Builder.Default
-    private LocalDateTime usedAt = null;
+    private LocalDateTime confirmedAt = null;
 
     /**
      * Check if the token is expired.
@@ -50,17 +48,11 @@ public class GuestAccessToken extends BaseEntity {
     }
 
     /**
-     * Check if the token is valid (not used and not expired).
-     *
-     * @return true if the token is valid
+     * Mark the token as confirmed by setting the confirmedAt timestamp.
+     * This is used for tracking when the guest first accessed their booking.
+     * Does not prevent token reuse.
      */
-    public boolean isValid() {
-        return usedAt == null && !isExpired();}
-
-    /**
-     * Mark the token as used by setting the usedAt timestamp.
-     */
-    public void markAsUsed() {
-        this.usedAt = LocalDateTime.now();
+    public void markAsConfirmed() {
+        this.confirmedAt = LocalDateTime.now();
     }
 }
