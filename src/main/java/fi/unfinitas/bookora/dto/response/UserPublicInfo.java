@@ -19,4 +19,5 @@ public class UserPublicInfo {
     private UUID id;
     private String username;
     private String role;
+    private Boolean isEmailVerified;
 }

@@ -26,15 +26,9 @@ public class ApiResponse<T> {
 
     private T data;
 
-    /**
-     * Timestamp of the response
-     */
     @Builder.Default
     private LocalDateTime timestamp = LocalDateTime.now();
 
-    /**
-     * Create a success response with data.
-     */
     public static <T> ApiResponse<T> success(final String message, final T data) {
         return ApiResponse.<T>builder()
                 .status("SUCCESS")
@@ -44,9 +38,6 @@ public class ApiResponse<T> {
                 .build();
     }
 
-    /**
-     * Create a success response without data.
-     */
     public static <T> ApiResponse<T> success(final String message) {
         return ApiResponse.<T>builder()
                 .status("SUCCESS")
@@ -55,9 +46,6 @@ public class ApiResponse<T> {
                 .build();
     }
 
-    /**
-     * Create an error response.
-     */
     public static <T> ApiResponse<T> error(final String message) {
         return ApiResponse.<T>builder()
                 .status("ERROR")
@@ -66,9 +54,6 @@ public class ApiResponse<T> {
                 .build();
     }
 
-    /**
-     * Create an error response with data (e.g., validation errors).
-     */
     public static <T> ApiResponse<T> error(final String message, final T data) {
         return ApiResponse.<T>builder()
                 .status("ERROR")
@@ -78,9 +63,6 @@ public class ApiResponse<T> {
                 .build();
     }
 
-    /**
-     * Create a fail response (client error).
-     */
     public static <T> ApiResponse<T> fail(final String message) {
         return ApiResponse.<T>builder()
                 .status("FAIL")
@@ -89,9 +71,6 @@ public class ApiResponse<T> {
                 .build();
     }
 
-    /**
-     * Create a fail response with data.
-     */
     public static <T> ApiResponse<T> fail(final String message, final T data) {
         return ApiResponse.<T>builder()
                 .status("FAIL")

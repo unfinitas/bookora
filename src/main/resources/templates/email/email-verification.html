@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Verification</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            background-color: #ffffff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #4CAF50;
+        }
+        .header h1 {
+            color: #4CAF50;
+            margin: 0;
+            font-size: 28px;
+        }
+        .content {
+            padding: 20px 0;
+        }
+        .cta-button {
+            display: inline-block;
+            background-color: #4CAF50;
+            color: white;
+            padding: 15px 30px;
+            text-decoration: none;
+            border-radius: 5px;
+            margin: 20px 0;
+            font-weight: bold;
+            text-align: center;
+        }
+        .cta-button:hover {
+            background-color: #45a049;
+        }
+        .footer {
+            text-align: center;
+            padding-top: 20px;
+            border-top: 1px solid #e0e0e0;
+            margin-top: 30px;
+            color: #777;
+            font-size: 14px;
+        }
+        .info-box {
+            background-color: #f9f9f9;
+            border-left: 4px solid #4CAF50;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .warning {
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        @media only screen and (max-width: 600px) {
+            body {
+                padding: 10px;
+            }
+            .container {
+                padding: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Bookora</h1>
+            <p style="margin: 10px 0 0 0; color: #666;">Welcome to Bookora!</p>
+        </div>
+
+        <div class="content">
+            <p>Hello <span th:text="${firstName}">User</span>,</p>
+
+            <p>Thank you for registering with Bookora! To complete your registration and start booking services, please verify your email address.</p>
+
+            <div class="warning">
+                <strong>⚠️ Action Required:</strong> Click the button below to verify your email address.
+            </div>
+
+            <div style="text-align: center;">
+                <a th:href="${verificationLink}" class="cta-button">
+                    Verify Email Address
+                </a>
+            </div>
+
+            <div class="info-box">
+                <p style="margin: 0;">
+                    <strong>📌 Important Information:</strong>
+                </p>
+                <ul style="margin: 10px 0 0 0; padding-left: 20px;">
+                    <li>This verification link will expire in <strong><span th:text="${expirationDays}">7</span> days</strong></li>
+                    <li>You can request a new verification email if this one expires</li>
+                    <li>You must verify your email before you can log in to your account</li>
+                </ul>
+            </div>
+
+            <p style="margin-top: 20px;">
+                If the button doesn't work, you can copy and paste this link into your browser:
+            </p>
+            <p style="word-break: break-all; background-color: #f9f9f9; padding: 10px; border-radius: 4px; font-size: 12px; color: #666;">
+                <span th:text="${verificationLink}">verification-link</span>
+            </p>
+
+            <div style="margin-top: 30px; padding: 15px; background-color: #e8f5e9; border-radius: 4px;">
+                <p style="margin: 0; color: #2e7d32;">
+                    <strong>🎉 What's Next?</strong>
+                </p>
+                <ul style="margin: 10px 0 0 0; padding-left: 20px; color: #2e7d32;">
+                    <li>Verify your email address</li>
+                    <li>Log in to your account</li>
+                    <li>Browse and book amazing services</li>
+                    <li>Manage your bookings easily</li>
+                </ul>
+            </div>
+
+            <p style="margin-top: 20px; color: #666; font-size: 14px;">
+                If you didn't create an account with Bookora, you can safely ignore this email.
+            </p>
+        </div>
+
+        <div class="footer">
+            <p>Need help? Contact us at <a th:href="'mailto:support@bookora.fi'" style="color: #4CAF50; text-decoration: none;">support@bookora.fi</a></p>
+            <p style="margin-top: 10px; font-size: 12px; color: #999;">
+                This is an automated email from Bookora. Please do not reply to this email.
+            </p>
+        </div>
+    </div>
+</body>
+</html>

@@ -6,6 +6,7 @@ import lombok.*;
 import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.SQLRestriction;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 import static fi.unfinitas.bookora.domain.enums.UserRole.USER;
@@ -52,6 +53,13 @@ public class User extends BaseEntity {
     @Column(name = "phone_number", length = 20)
     private String phoneNumber;
 
+    @Column(name = "is_email_verified", nullable = false)
+    @Builder.Default
+    private Boolean isEmailVerified = false;
+
+    @Column(name = "last_verification_email_sent_at")
+    private LocalDateTime lastVerificationEmailSentAt;
+
     @PrePersist
     @PreUpdate
     private void validate() {
@@ -61,5 +69,12 @@ public class User extends BaseEntity {
         if (!isGuest && password == null) {
             throw new IllegalStateException("Registered users must have password");
         }
+    }
+
+    public boolean canResendVerificationEmail() {
+        if (lastVerificationEmailSentAt == null) {
+            return true;
+        }
+        return LocalDateTime.now().isAfter(lastVerificationEmailSentAt.plusHours(1));
     }
 }

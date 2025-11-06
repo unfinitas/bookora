@@ -62,8 +62,11 @@ jwt:
 
 # Bookora Application Settings
 bookora:
-  # Frontend URL (overridden by profile-specific configs)
+  # Frontend URL (used for redirects after verification)
   frontend-url: ${FRONTEND_URL:http://localhost:3000}
+
+  # Backend URL (used in email verification links)
+  backend-url: ${BACKEND_URL:http://localhost:8080/api}
 
   # Email Settings
   email:
@@ -77,6 +80,11 @@ bookora:
     booking:
       cancellation-window-hours: 24
 
+  # Email Verification Configuration
+  verification:
+    token:
+      expiration-days: ${VERIFICATION_TOKEN_EXPIRATION_DAYS:7}
+
 # Logging Configuration (Base)
 logging:
   level:
@@ -84,5 +92,17 @@ logging:
     fi.unfinitas.bookora: INFO
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+# Resilience4j Configuration
+resilience4j:
+  ratelimiter:
+    instances:
+      emailVerificationResend:
+        limit-for-period: 1
+        limit-refresh-period: 1h
+        timeout-duration: 0
+        allow-health-indicator-to-fail: true
+        register-health-indicator: true
+        event-consumer-buffer-size: 100
 
 

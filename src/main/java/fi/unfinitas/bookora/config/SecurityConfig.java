@@ -19,9 +19,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
-/**
- * Security configuration for the application.
- */
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
@@ -31,9 +28,6 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final UserDetailsService userDetailsService;
 
-    /**
-     * Configure security filter chain.
-     */
     @Bean
     public SecurityFilterChain securityFilterChain(final HttpSecurity http) throws Exception {
         http
@@ -59,9 +53,6 @@ public class SecurityConfig {
         return http.build();
     }
 
-    /**
-     * Configure authentication provider.
-     */
     @Bean
     public AuthenticationProvider authenticationProvider() {
         final DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider(userDetailsService);
@@ -69,17 +60,11 @@ public class SecurityConfig {
         return authProvider;
     }
 
-    /**
-     * Configure authentication manager.
-     */
     @Bean
     public AuthenticationManager authenticationManager(final AuthenticationConfiguration config) throws Exception {
         return config.getAuthenticationManager();
     }
 
-    /**
-     * Configure password encoder.
-     */
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
