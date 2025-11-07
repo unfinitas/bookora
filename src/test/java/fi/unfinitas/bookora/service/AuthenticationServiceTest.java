@@ -3,11 +3,15 @@ package fi.unfinitas.bookora.service;
 import fi.unfinitas.bookora.config.BookoraProperties;
 import fi.unfinitas.bookora.domain.enums.UserRole;
 import fi.unfinitas.bookora.domain.model.EmailVerificationToken;
+import fi.unfinitas.bookora.domain.model.RefreshToken;
 import fi.unfinitas.bookora.domain.model.User;
 import fi.unfinitas.bookora.dto.request.LoginRequest;
 import fi.unfinitas.bookora.dto.request.RegisterRequest;
 import fi.unfinitas.bookora.dto.response.LoginResponse;
 import fi.unfinitas.bookora.dto.response.UserPublicInfo;
+import fi.unfinitas.bookora.util.CookieUtil;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import fi.unfinitas.bookora.exception.EmailAlreadyExistsException;
 import fi.unfinitas.bookora.exception.InvalidCredentialsException;
 import fi.unfinitas.bookora.exception.UserNotFoundException;
@@ -17,7 +21,6 @@ import fi.unfinitas.bookora.security.CustomUserDetails;
 import fi.unfinitas.bookora.security.JwtUtil;
 import fi.unfinitas.bookora.service.impl.AuthenticationServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -33,6 +36,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 
 import java.time.LocalDateTime;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -79,6 +83,21 @@ class AuthenticationServiceTest {
     @Mock
     private BookoraProperties.Verification.Token tokenConfig;
 
+    @Mock
+    private BookoraProperties.Jwt jwtConfig;
+
+    @Mock
+    private RefreshTokenService refreshTokenService;
+
+    @Mock
+    private CookieUtil cookieUtil;
+
+    @Mock
+    private HttpServletRequest request;
+
+    @Mock
+    private HttpServletResponse response;
+
     @InjectMocks
     private AuthenticationServiceImpl authenticationService;
 
@@ -121,7 +140,6 @@ class AuthenticationServiceTest {
     }
 
     @Test
-    @DisplayName("Should successfully register new user")
     void shouldSuccessfullyRegisterNewUser() {
         final EmailVerificationToken token = EmailVerificationToken.builder()
                 .userId(testUser.getId())
@@ -155,7 +173,6 @@ class AuthenticationServiceTest {
     }
 
     @Test
-    @DisplayName("Should throw exception when email already exists")
     void shouldThrowExceptionWhenEmailAlreadyExists() {
         when(userService.createUser(registerRequest))
                 .thenThrow(new EmailAlreadyExistsException("Email is already registered: " + registerRequest.getEmail()));
@@ -168,7 +185,6 @@ class AuthenticationServiceTest {
     }
 
     @Test
-    @DisplayName("Should throw exception when username already exists")
     void shouldThrowExceptionWhenUsernameAlreadyExists() {
         when(userService.createUser(registerRequest))
                 .thenThrow(new UsernameAlreadyExistsException("Username is already taken: " + registerRequest.getUsername()));
@@ -182,37 +198,44 @@ class AuthenticationServiceTest {
 
 
     @Test
-    @DisplayName("Should successfully login user")
     void shouldSuccessfullyLoginUser() {
         final Authentication authentication = mock(Authentication.class);
         when(authentication.getPrincipal()).thenReturn(userDetails);
         when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
                 .thenReturn(authentication);
         when(jwtUtil.generateAccessToken(userDetails)).thenReturn("access-token");
-        when(jwtUtil.generateRefreshToken(userDetails)).thenReturn("refresh-token");
         when(jwtUtil.getAccessTokenExpiration()).thenReturn(86400000L);
 
-        final LoginResponse result = authenticationService.login(loginRequest);
+        RefreshToken refreshToken = RefreshToken.builder()
+                .id(1L)
+                .userId(testUser.getId())
+                .tokenHash("hash123")
+                .tokenFamily(UUID.randomUUID())
+                .expiresAt(LocalDateTime.now().plusDays(7))
+                .build();
+        refreshToken.setRawToken("refresh-token");
+        when(refreshTokenService.createRefreshToken(any(UUID.class), any(UUID.class))).thenReturn(refreshToken);
+
+        final LoginResponse result = authenticationService.login(loginRequest, response);
 
         assertThat(result).isNotNull();
         assertThat(result.username()).isEqualTo("testuser");
         assertThat(result.accessToken()).isEqualTo("access-token");
-        assertThat(result.refreshToken()).isEqualTo("refresh-token");
         assertThat(result.tokenType()).isEqualTo("Bearer");
         assertThat(result.expiresIn()).isEqualTo(86400000L);
 
         verify(authenticationManager).authenticate(any(UsernamePasswordAuthenticationToken.class));
         verify(jwtUtil).generateAccessToken(userDetails);
-        verify(jwtUtil).generateRefreshToken(userDetails);
+        verify(refreshTokenService).createRefreshToken(any(UUID.class), any(UUID.class));
+        verify(cookieUtil).setRefreshTokenCookie(response, "refresh-token");
     }
 
     @Test
-    @DisplayName("Should throw exception when credentials are invalid")
     void shouldThrowExceptionWhenCredentialsAreInvalid() {
         when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
                 .thenThrow(new BadCredentialsException("Invalid credentials"));
 
-        assertThatThrownBy(() -> authenticationService.login(loginRequest))
+        assertThatThrownBy(() -> authenticationService.login(loginRequest, response))
                 .isInstanceOf(InvalidCredentialsException.class)
                 .hasMessageContaining("Invalid username or password");
 
@@ -221,64 +244,62 @@ class AuthenticationServiceTest {
     }
 
     @Test
-    @DisplayName("Should successfully refresh token")
     void shouldSuccessfullyRefreshToken() {
-        final String refreshToken = "valid-refresh-token";
-        when(jwtUtil.extractUsername(refreshToken)).thenReturn("testuser");
-        when(userDetailsService.loadUserByUsername("testuser")).thenReturn(userDetails);
-        when(jwtUtil.validateToken(refreshToken, userDetails)).thenReturn(true);
-        when(jwtUtil.generateAccessToken(userDetails)).thenReturn("new-access-token");
-        when(jwtUtil.generateRefreshToken(userDetails)).thenReturn("new-refresh-token");
+        final String rawToken = "valid-refresh-token";
+        when(cookieUtil.getRefreshTokenFromCookie(request)).thenReturn(Optional.of(rawToken));
+
+        RefreshToken newRefreshToken = RefreshToken.builder()
+                .id(2L)
+                .userId(testUser.getId())
+                .tokenHash("new-hash")
+                .tokenFamily(UUID.randomUUID())
+                .expiresAt(LocalDateTime.now().plusDays(7))
+                .build();
+        newRefreshToken.setRawToken("new-refresh-token");
+        when(refreshTokenService.validateAndRotateToken(rawToken)).thenReturn(newRefreshToken);
+        when(userService.findById(testUser.getId())).thenReturn(testUser);
+        when(jwtUtil.generateAccessToken(any(UserDetails.class))).thenReturn("new-access-token");
         when(jwtUtil.getAccessTokenExpiration()).thenReturn(86400000L);
 
-        final LoginResponse result = authenticationService.refreshToken(refreshToken);
+        final LoginResponse result = authenticationService.refreshToken(request, response);
 
         assertThat(result).isNotNull();
         assertThat(result.username()).isEqualTo("testuser");
         assertThat(result.accessToken()).isEqualTo("new-access-token");
-        assertThat(result.refreshToken()).isEqualTo("new-refresh-token");
         assertThat(result.tokenType()).isEqualTo("Bearer");
 
-        verify(jwtUtil).extractUsername(refreshToken);
-        verify(jwtUtil).validateToken(refreshToken, userDetails);
-        verify(jwtUtil).generateAccessToken(userDetails);
-        verify(jwtUtil).generateRefreshToken(userDetails);
+        verify(cookieUtil).getRefreshTokenFromCookie(request);
+        verify(refreshTokenService).validateAndRotateToken(rawToken);
+        verify(userService).findById(testUser.getId());
+        verify(jwtUtil).generateAccessToken(any(UserDetails.class));
+        verify(cookieUtil).setRefreshTokenCookie(response, "new-refresh-token");
     }
 
     @Test
-    @DisplayName("Should throw exception when refresh token is invalid")
-    void shouldThrowExceptionWhenRefreshTokenIsInvalid() {
-        final String refreshToken = "invalid-refresh-token";
-        when(jwtUtil.extractUsername(refreshToken)).thenReturn("testuser");
-        when(userDetailsService.loadUserByUsername("testuser")).thenReturn(userDetails);
-        when(jwtUtil.validateToken(refreshToken, userDetails)).thenReturn(false);
+    void shouldThrowExceptionWhenRefreshTokenNotFoundInCookie() {
+        when(cookieUtil.getRefreshTokenFromCookie(request)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> authenticationService.refreshToken(refreshToken))
+        assertThatThrownBy(() -> authenticationService.refreshToken(request, response))
                 .isInstanceOf(InvalidCredentialsException.class)
-                .hasMessageContaining("Invalid refresh token");
+                .hasMessageContaining("Refresh token not found");
 
-        verify(jwtUtil).validateToken(refreshToken, userDetails);
-        verify(jwtUtil, never()).generateAccessToken(any());
+        verify(cookieUtil).getRefreshTokenFromCookie(request);
+        verify(refreshTokenService, never()).validateAndRotateToken(any());
     }
 
     @Test
-    @DisplayName("Should throw exception when user not found during token refresh")
-    void shouldThrowExceptionWhenUserNotFoundDuringTokenRefresh() {
-        final String refreshToken = "valid-refresh-token";
-        when(jwtUtil.extractUsername(refreshToken)).thenReturn("nonexistent");
-        when(userDetailsService.loadUserByUsername("nonexistent"))
-                .thenThrow(new UserNotFoundException("User not found with username: nonexistent"));
+    void shouldSuccessfullyLogoutUser() {
+        final String rawToken = "refresh-token";
+        when(cookieUtil.getRefreshTokenFromCookie(request)).thenReturn(Optional.of(rawToken));
 
-        assertThatThrownBy(() -> authenticationService.refreshToken(refreshToken))
-                .isInstanceOf(UserNotFoundException.class)
-                .hasMessageContaining("User not found");
+        authenticationService.logout(request, response);
 
-        verify(userDetailsService).loadUserByUsername("nonexistent");
-        verify(jwtUtil, never()).generateAccessToken(any());
+        verify(cookieUtil).getRefreshTokenFromCookie(request);
+        verify(refreshTokenService).revokeToken(rawToken);
+        verify(cookieUtil).clearRefreshTokenCookie(response);
     }
 
     @Test
-    @DisplayName("Should generate verification token when registering")
     void shouldGenerateVerificationTokenWhenRegistering() {
         final EmailVerificationToken token = EmailVerificationToken.builder()
                 .userId(testUser.getId())
@@ -304,7 +325,6 @@ class AuthenticationServiceTest {
     }
 
     @Test
-    @DisplayName("Should send verification email when registering")
     void shouldSendVerificationEmailWhenRegistering() {
         final EmailVerificationToken token = EmailVerificationToken.builder()
                 .userId(testUser.getId())
@@ -330,7 +350,6 @@ class AuthenticationServiceTest {
     }
 
     @Test
-    @DisplayName("Should update lastVerificationEmailSentAt when registering")
     void shouldUpdateLastVerificationEmailSentAtWhenRegistering() {
         final EmailVerificationToken token = EmailVerificationToken.builder()
                 .userId(testUser.getId())

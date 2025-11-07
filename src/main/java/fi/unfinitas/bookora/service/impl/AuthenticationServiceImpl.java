@@ -6,6 +6,7 @@ import fi.unfinitas.bookora.domain.model.EmailVerificationToken;
 import fi.unfinitas.bookora.domain.model.User;
 import fi.unfinitas.bookora.dto.request.LoginRequest;
 import fi.unfinitas.bookora.dto.request.RegisterRequest;
+import fi.unfinitas.bookora.domain.model.RefreshToken;
 import fi.unfinitas.bookora.dto.response.LoginResponse;
 import fi.unfinitas.bookora.dto.response.UserPublicInfo;
 import fi.unfinitas.bookora.exception.EmailNotVerifiedException;
@@ -15,7 +16,11 @@ import fi.unfinitas.bookora.security.CustomUserDetails;
 import fi.unfinitas.bookora.security.JwtUtil;
 import fi.unfinitas.bookora.service.AuthenticationService;
 import fi.unfinitas.bookora.service.EmailVerificationService;
+import fi.unfinitas.bookora.service.RefreshTokenService;
 import fi.unfinitas.bookora.service.UserService;
+import fi.unfinitas.bookora.util.CookieUtil;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -31,6 +36,7 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * Default implementation of AuthenticationService.
@@ -49,6 +55,8 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     private final EmailVerificationService emailVerificationService;
     private final ApplicationEventPublisher eventPublisher;
     private final BookoraProperties bookoraProperties;
+    private final RefreshTokenService refreshTokenService;
+    private final CookieUtil cookieUtil;
 
     /**
      * Register a new user
@@ -75,12 +83,14 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
     /**
      * Authenticate a user and generate tokens.
+     * Refresh token is set as HttpOnly cookie directly.
      *
      * @param request the login request
-     * @return login data with tokens
+     * @param response HTTP response for setting cookies
+     * @return login data with access token only
      */
     @Override
-    public LoginResponse login(final LoginRequest request) {
+    public LoginResponse login(final LoginRequest request, final HttpServletResponse response) {
         log.debug("Attempting to authenticate user");
 
         try {
@@ -89,10 +99,24 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
             log.debug("User authenticated successfully with ID: {}", user.getId());
 
-            return buildLoginResponse(user, userDetails);
+            // Generate access token
+            final String accessToken = jwtUtil.generateAccessToken(userDetails);
+            final Long expiresIn = jwtUtil.getAccessTokenExpiration();
+
+            // Create and set refresh token as HttpOnly cookie
+            final RefreshToken refreshToken = refreshTokenService.createRefreshToken(user.getId(), UUID.randomUUID());
+            cookieUtil.setRefreshTokenCookie(response, refreshToken.getRawToken());
+
+            return new LoginResponse(
+                    user.getId(),
+                    user.getUsername(),
+                    user.getRole().name(),
+                    accessToken,
+                    "Bearer",
+                    expiresIn
+            );
 
         } catch (final InternalAuthenticationServiceException e) {
-            // Spring Security wraps exceptions from UserDetailsService
             if (e.getCause() instanceof EmailNotVerifiedException) {
                 log.warn("Email not verified for user: {}", request.username());
                 throw (EmailNotVerifiedException) e.getCause();
@@ -105,30 +129,73 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     }
 
     /**
-     * Refresh access token using refresh token
+     * Refresh access token using refresh token from cookie.
+     * New refresh token is set as HttpOnly cookie directly.
      *
-     * @param refreshToken the refresh token
-     * @return new login data with tokens
+     * @param request HTTP request to get refresh token from cookie
+     * @param response HTTP response for setting cookies
+     * @return new login data with access token only
      */
     @Override
-    public LoginResponse refreshToken(final String refreshToken) {
+    public LoginResponse refreshToken(final HttpServletRequest request, final HttpServletResponse response) {
         log.debug("Attempting to refresh token");
 
-        try {
-            final String username = jwtUtil.extractUsername(refreshToken);
-            final UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+        // Get refresh token from cookie
+        final String rawRefreshToken = cookieUtil.getRefreshTokenFromCookie(request)
+                .orElseThrow(() -> new InvalidCredentialsException("Refresh token not found"));
 
-            validateRefreshToken(refreshToken, userDetails, username);
+        // Validate and rotate refresh token
+        final RefreshToken newRefreshToken = refreshTokenService.validateAndRotateToken(rawRefreshToken);
 
-            final User user = ((CustomUserDetails) userDetails).getUser();
+        // Load user
+        final User user = userService.findById(newRefreshToken.getUserId());
 
-            log.debug("Token refreshed successfully for user ID: {}", user.getId());
+        // Create UserDetails directly from User without additional DB query
+        final UserDetails userDetails = new CustomUserDetails(user);
 
-            return buildLoginResponse(user, userDetails);
-        } catch (final EmailNotVerifiedException e) {
-            log.warn("Email not verified during token refresh");
-            throw e;
-        }
+        log.debug("Token refreshed successfully for user ID: {}", user.getId());
+
+        // Generate new access token
+        final String accessToken = jwtUtil.generateAccessToken(userDetails);
+        final Long expiresIn = jwtUtil.getAccessTokenExpiration();
+
+        // Set new refresh token as HttpOnly cookie
+        cookieUtil.setRefreshTokenCookie(response, newRefreshToken.getRawToken());
+
+        return new LoginResponse(
+                user.getId(),
+                user.getUsername(),
+                user.getRole().name(),
+                accessToken,
+                "Bearer",
+                expiresIn
+        );
+    }
+
+    /**
+     * Logout user by revoking refresh token and clearing cookie.
+     *
+     * @param request HTTP request to get refresh token from cookie
+     * @param response HTTP response for clearing cookies
+     */
+    @Override
+    public void logout(final HttpServletRequest request, final HttpServletResponse response) {
+        log.debug("Attempting to logout user");
+
+        // Get refresh token from cookie if present and revoke it
+        cookieUtil.getRefreshTokenFromCookie(request).ifPresent(token -> {
+            try {
+                refreshTokenService.revokeToken(token);
+                log.debug("Refresh token revoked during logout");
+            } catch (Exception e) {
+                log.warn("Failed to revoke refresh token during logout", e);
+            }
+        });
+
+        // Clear the refresh token cookie
+        cookieUtil.clearRefreshTokenCookie(response);
+
+        log.debug("Logout completed");
     }
 
     private UserDetails authenticateUser(final LoginRequest request) {
@@ -139,29 +206,6 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 )
         );
         return (UserDetails) authentication.getPrincipal();
-    }
-
-    private void validateRefreshToken(final String refreshToken, final UserDetails userDetails, final String username) {
-        if (!jwtUtil.validateToken(refreshToken, userDetails)) {
-            log.warn("Invalid refresh token");
-            throw new InvalidCredentialsException("Invalid refresh token");
-        }
-    }
-
-    private LoginResponse buildLoginResponse(final User user, final UserDetails userDetails) {
-        final String accessToken = jwtUtil.generateAccessToken(userDetails);
-        final String refreshToken = jwtUtil.generateRefreshToken(userDetails);
-        final Long expiresIn = jwtUtil.getAccessTokenExpiration();
-
-        return new LoginResponse(
-                user.getId(),
-                user.getUsername(),
-                user.getRole().name(),
-                accessToken,
-                refreshToken,
-                "Bearer",
-                expiresIn
-        );
     }
 
     private void publishVerificationEmail(final User user, final EmailVerificationToken token) {

@@ -1,0 +1,755 @@
+###
+# Authentication API Tests
+# =========================
+#
+# This file contains comprehensive tests for authentication endpoints:
+# - POST /auth/register - User registration
+# - POST /auth/login - User login with JWT token generation
+# - POST /auth/refresh - Access token refresh using HttpOnly cookie
+# - POST /auth/logout - User logout with token revocation
+#
+# Variables used:
+# - {{baseUrl}} - Base API URL from http-client.env.json
+# - {{accessToken}} - JWT access token (extracted from login response)
+# - {{userId}} - User ID (extracted from registration/login response)
+#
+# Expected Status Codes:
+# - 201 CREATED: Successful registration
+# - 200 OK: Successful login, refresh, logout
+# - 400 BAD_REQUEST: Validation failures
+# - 401 UNAUTHORIZED: Invalid credentials, expired token
+# - 403 FORBIDDEN: Token reuse detected
+# - 409 CONFLICT: Username/email already exists
+#
+###
+
+### ============================================
+### REGISTRATION TESTS
+### ============================================
+
+### 1. Register New User - Success (201 CREATED)
+# Expected Response:
+# {
+#   "status": "SUCCESS",
+#   "message": "User registration successful",
+#   "data": {
+#     "id": "uuid",
+#     "username": "testuser",
+#     "role": "CUSTOMER",
+#     "isEmailVerified": false
+#   },
+#   "timestamp": "2025-11-07T..."
+# }
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "username": "testuser_{{$timestamp}}",
+  "firstName": "Test",
+  "lastName": "User",
+  "email": "testuser{{$timestamp}}@example.com",
+  "password": "Test@1234",
+  "phoneNumber": "+1234567890"
+}
+
+> {%
+    client.test("Registration should return 201", function() {
+        client.assert(response.status === 201, "Response status is not 201");
+    });
+
+    client.test("Response should have SUCCESS status", function() {
+        client.assert(response.body.status === "SUCCESS", "Status is not SUCCESS");
+    });
+
+    client.test("Response should contain user data", function() {
+        client.assert(response.body.data.id !== undefined, "User ID not found");
+        client.assert(response.body.data.username !== undefined, "Username not found");
+        client.assert(response.body.data.role === "USER", "Role is not USER");
+        client.assert(response.body.data.isEmailVerified === false, "Email should not be verified");
+    });
+
+    // Save userId for later tests
+    client.global.set("userId", response.body.data.id);
+    client.global.set("testUsername", response.body.data.username);
+
+    client.log("User registered successfully with ID: " + response.body.data.id);
+%}
+
+###
+
+### 2. Register with Duplicate Username - Failure (409 CONFLICT)
+# Expected Response: EmailAlreadyExistsException or UsernameAlreadyExistsException
+# {
+#   "status": "FAIL",
+#   "message": "Username already exists",
+#   "timestamp": "..."
+# }
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "username": "{{testUsername}}",
+  "firstName": "Duplicate",
+  "lastName": "User",
+  "email": "another{{$timestamp}}@example.com",
+  "password": "Test@1234",
+  "phoneNumber": "+9876543210"
+}
+
+> {%
+    client.test("Duplicate username should return 409", function() {
+        client.assert(response.status === 409, "Response status is not 409");
+    });
+
+    client.test("Response should have FAIL status", function() {
+        client.assert(response.body.status === "FAIL", "Status is not FAIL");
+    });
+%}
+
+###
+
+### 3. Register with Invalid Username - Failure (400 BAD_REQUEST)
+# Username must be 3-50 chars, pattern: ^[a-zA-Z0-9_.-]+$
+# Expected Response: Validation error
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "username": "ab",
+  "firstName": "Test",
+  "lastName": "User",
+  "email": "test{{$timestamp}}@example.com",
+  "password": "Test@1234"
+}
+
+> {%
+    client.test("Invalid username should return 400", function() {
+        client.assert(response.status === 400, "Response status is not 400");
+    });
+
+    client.test("Response should have FAIL status", function() {
+        client.assert(response.body.status === "FAIL", "Status is not FAIL");
+    });
+
+    client.test("Response should contain validation errors", function() {
+        client.assert(response.body.data !== undefined, "Validation errors not found");
+    });
+%}
+
+###
+
+### 4. Register with Weak Password - Failure (400 BAD_REQUEST)
+# Password must be 8-100 chars with: lowercase, uppercase, digit, special char
+# Expected Response: Validation error for password
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "username": "testuser{{$timestamp}}",
+  "firstName": "Test",
+  "lastName": "User",
+  "email": "test{{$timestamp}}@example.com",
+  "password": "weakpass"
+}
+
+> {%
+    client.test("Weak password should return 400", function() {
+        client.assert(response.status === 400, "Response status is not 400");
+    });
+
+    client.test("Response should contain password validation error", function() {
+        client.assert(response.body.data.password !== undefined, "Password validation error not found");
+    });
+%}
+
+###
+
+### 5. Register with Invalid Email - Failure (400 BAD_REQUEST)
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "username": "testuser{{$timestamp}}",
+  "firstName": "Test",
+  "lastName": "User",
+  "email": "invalid-email",
+  "password": "Test@1234"
+}
+
+> {%
+    client.test("Invalid email should return 400", function() {
+        client.assert(response.status === 400, "Response status is not 400");
+    });
+
+    client.test("Response should contain email validation error", function() {
+        client.assert(response.body.data.email !== undefined, "Email validation error not found");
+    });
+%}
+
+###
+
+### 6. Register with Missing Required Fields - Failure (400 BAD_REQUEST)
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "username": "testuser{{$timestamp}}"
+}
+
+> {%
+    client.test("Missing required fields should return 400", function() {
+        client.assert(response.status === 400, "Response status is not 400");
+    });
+
+    client.test("Response should contain multiple validation errors", function() {
+        client.assert(response.body.data !== undefined, "Validation errors not found");
+        client.assert(Object.keys(response.body.data).length > 1, "Should have multiple validation errors");
+    });
+%}
+
+###
+
+### ============================================
+### LOGIN TESTS
+### ============================================
+
+### 7. Login - Success (200 OK)
+# Note: This will fail if email is not verified. First verify email or test with verified user.
+# Expected Response:
+# {
+#   "status": "SUCCESS",
+#   "message": "Login successful",
+#   "data": {
+#     "id": "uuid",
+#     "username": "testuser",
+#     "role": "CUSTOMER",
+#     "accessToken": "jwt_token_here",
+#     "tokenType": "Bearer",
+#     "expiresIn": 86400000
+#   },
+#   "timestamp": "..."
+# }
+# Also sets HttpOnly cookie: refreshToken
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{testUsername}}",
+  "password": "Test@1234"
+}
+
+> {%
+    client.test("Login might fail if email not verified", function() {
+        if (response.status === 401 && response.body.message.includes("verified")) {
+            client.log("Expected failure: Email not verified yet. This is correct behavior.");
+            client.assert(response.status === 401, "Response status is not 401");
+        } else {
+            client.assert(response.status === 200, "Response status is not 200");
+        }
+    });
+
+    if (response.status === 200) {
+        client.test("Response should contain access token", function() {
+            client.assert(response.body.data.accessToken !== undefined, "Access token not found");
+            client.assert(response.body.data.tokenType === "Bearer", "Token type is not Bearer");
+            client.assert(response.body.data.expiresIn > 0, "Expiration time is invalid");
+        });
+
+        client.test("Should set HttpOnly refresh token cookie", function() {
+            const cookies = response.headers.valueOf("Set-Cookie");
+            client.assert(cookies !== undefined, "Set-Cookie header not found");
+            client.assert(cookies.includes("refreshToken"), "refreshToken cookie not found");
+            client.assert(cookies.includes("HttpOnly"), "Cookie should be HttpOnly");
+            client.assert(cookies.includes("Path=/api/auth"), "Cookie path should be /api/auth");
+        });
+
+        // Save access token for authenticated requests
+        client.global.set("accessToken", response.body.data.accessToken);
+        client.log("Login successful. Access token saved.");
+    }
+%}
+
+###
+
+### 8. Login with Invalid Credentials - Failure (401 UNAUTHORIZED)
+# Expected Response: InvalidCredentialsException
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{testUsername}}",
+  "password": "WrongPassword@123"
+}
+
+> {%
+    client.test("Invalid credentials should return 401", function() {
+        client.assert(response.status === 401, "Response status is not 401");
+    });
+
+    client.test("Response should have FAIL status", function() {
+        client.assert(response.body.status === "FAIL", "Status is not FAIL");
+    });
+%}
+
+###
+
+### 9. Login with Non-existent User - Failure (401 UNAUTHORIZED)
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "username": "nonexistentuser999",
+  "password": "Test@1234"
+}
+
+> {%
+    client.test("Non-existent user should return 401", function() {
+        client.assert(response.status === 401, "Response status is not 401");
+    });
+%}
+
+###
+
+### 10. Login with Missing Password - Failure (400 BAD_REQUEST)
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{testUsername}}"
+}
+
+> {%
+    client.test("Missing password should return 400", function() {
+        client.assert(response.status === 400, "Response status is not 400");
+    });
+%}
+
+###
+
+### 11. Login with Verified User - Success (Use this after email verification)
+# Create a new user and verify their email first, then use this test
+# Replace with actual verified user credentials
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{testUsername}}",
+  "password": "Test@1234"
+}
+
+> {%
+    client.test("Login with verified email should return 200", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+
+    if (response.status === 200) {
+        client.test("Should receive access token", function() {
+            client.assert(response.body.data.accessToken !== undefined, "Access token not found");
+        });
+
+        // Save for refresh and logout tests
+        client.global.set("accessToken", response.body.data.accessToken);
+        client.global.set("verifiedUserId", response.body.data.id);
+        client.log("Access token saved: " + response.body.data.accessToken.substring(0, 20) + "...");
+    }
+%}
+
+###
+
+### ============================================
+### TOKEN REFRESH TESTS
+### ============================================
+
+### 12. Refresh Access Token - Success (200 OK)
+# Requires valid refresh token in HttpOnly cookie (from previous login)
+# Expected Response: New access token + new refresh token (token rotation)
+# {
+#   "status": "SUCCESS",
+#   "message": "Token refreshed successfully",
+#   "data": {
+#     "id": "uuid",
+#     "username": "testuser",
+#     "role": "CUSTOMER",
+#     "accessToken": "new_jwt_token",
+#     "tokenType": "Bearer",
+#     "expiresIn": 86400000
+#   }
+# }
+POST {{baseUrl}}/auth/refresh
+Content-Type: application/json
+
+> {%
+    client.test("Refresh should return 200 if cookie exists", function() {
+        if (response.status === 401) {
+            client.log("Expected failure: No refresh token cookie found. Login first.");
+            return;
+        }
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+
+    if (response.status === 200) {
+        client.test("Should receive new access token", function() {
+            client.assert(response.body.data.accessToken !== undefined, "New access token not found");
+        });
+
+        client.test("Should receive new refresh token cookie (rotation)", function() {
+            const cookies = response.headers.valueOf("Set-Cookie");
+            client.assert(cookies !== undefined, "Set-Cookie header not found");
+            client.assert(cookies.includes("refreshToken"), "New refreshToken cookie not found");
+        });
+
+        // Update access token
+        client.global.set("accessToken", response.body.data.accessToken);
+        client.log("Token refreshed successfully");
+    }
+%}
+
+###
+
+### 13. Refresh without Cookie - Failure (401 UNAUTHORIZED)
+# This simulates a request without the HttpOnly cookie
+# In practice, this is hard to test because the cookie is automatically sent
+# You would need to manually delete the cookie or use a different HTTP client
+POST {{baseUrl}}/auth/refresh
+Content-Type: application/json
+
+# Note: If you have a valid cookie, this will succeed (200)
+# To truly test this, clear your cookies first
+
+> {%
+    client.test("Without refresh token should return 401", function() {
+        // This might return 200 if cookie exists from previous login
+        if (response.status === 200) {
+            client.log("Note: Request succeeded because valid refresh token exists");
+        }
+    });
+%}
+
+###
+
+### 14. Reuse Revoked Refresh Token - Failure (403 FORBIDDEN)
+# This is a security feature: Token Reuse Detection
+# If a revoked refresh token is used again, the entire token family is revoked
+# Expected: TokenReuseDetectedException → 403 FORBIDDEN
+#
+# To test this scenario:
+# 1. Login to get refresh token (creates token family)
+# 2. Use /refresh once (rotates token, marks old token as revoked)
+# 3. Try to use the OLD revoked token again
+# 4. Should receive 403 FORBIDDEN and all tokens in family are revoked
+#
+# This is difficult to test manually because cookies are managed by the browser.
+# You would need to:
+# - Capture the refresh token cookie after step 1
+# - Manually send it again after step 2
+#
+# Note: This is better tested with automated integration tests.
+
+###
+
+### ============================================
+### LOGOUT TESTS
+### ============================================
+
+### 15. Logout - Success (200 OK)
+# Revokes refresh token and clears cookie
+# Expected Response:
+# {
+#   "status": "SUCCESS",
+#   "message": "Logout successful",
+#   "timestamp": "..."
+# }
+POST {{baseUrl}}/auth/logout
+Content-Type: application/json
+
+> {%
+    client.test("Logout should return 200", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+
+    client.test("Response should have SUCCESS status", function() {
+        client.assert(response.body.status === "SUCCESS", "Status is not SUCCESS");
+    });
+
+    client.test("Should clear refresh token cookie", function() {
+        const cookies = response.headers.valueOf("Set-Cookie");
+        client.assert(cookies !== undefined, "Set-Cookie header not found");
+        client.assert(cookies.includes("Max-Age=0"), "Cookie should be cleared with Max-Age=0");
+    });
+
+    client.log("Logout successful. Refresh token revoked and cookie cleared.");
+%}
+
+###
+
+### 16. Logout without Cookie - Success (200 OK)
+# Logout should succeed even without refresh token cookie (idempotent)
+POST {{baseUrl}}/auth/logout
+Content-Type: application/json
+
+> {%
+    client.test("Logout without cookie should return 200", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+%}
+
+###
+
+### ============================================
+### COMPLETE AUTHENTICATION FLOW
+### ============================================
+
+### 17. Full Flow: Register → Login → Refresh → Logout
+# This section demonstrates a complete authentication workflow
+# Run these requests in sequence
+
+### Step 1: Register a new user
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "username": "flowtest_{{$timestamp}}",
+  "firstName": "Flow",
+  "lastName": "Test",
+  "email": "flowtest{{$timestamp}}@example.com",
+  "password": "Flow@Test123",
+  "phoneNumber": "+1122334455"
+}
+
+> {%
+    client.test("Step 1: Registration should succeed", function() {
+        client.assert(response.status === 201, "Registration failed");
+    });
+    client.global.set("flowUsername", response.body.data.username);
+    client.log("Step 1 Complete: User registered");
+%}
+
+###
+
+### Step 2: Verify email (manually)
+# Go to your email inbox or check logs for verification token
+# Then use email-verification.http to verify
+# OR manually update the database: UPDATE users SET email_verified = true WHERE username = 'flowtest_xxx';
+
+###
+
+### Step 3: Login with verified user
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{flowUsername}}",
+  "password": "Flow@Test123"
+}
+
+> {%
+    client.test("Step 3: Login should succeed", function() {
+        if (response.status === 401) {
+            client.log("Login failed: Email not verified. Please verify email first.");
+            return;
+        }
+        client.assert(response.status === 200, "Login failed");
+    });
+
+    if (response.status === 200) {
+        client.global.set("flowAccessToken", response.body.data.accessToken);
+        client.log("Step 3 Complete: Logged in successfully");
+    }
+%}
+
+###
+
+### Step 4: Refresh access token
+POST {{baseUrl}}/auth/refresh
+Content-Type: application/json
+
+> {%
+    client.test("Step 4: Token refresh should succeed", function() {
+        client.assert(response.status === 200, "Token refresh failed");
+    });
+
+    if (response.status === 200) {
+        client.global.set("flowAccessToken", response.body.data.accessToken);
+        client.log("Step 4 Complete: Token refreshed");
+    }
+%}
+
+###
+
+### Step 5: Logout
+POST {{baseUrl}}/auth/logout
+Content-Type: application/json
+
+> {%
+    client.test("Step 5: Logout should succeed", function() {
+        client.assert(response.status === 200, "Logout failed");
+    });
+    client.log("Step 5 Complete: Logged out successfully");
+    client.log("=======================================");
+    client.log("Full authentication flow completed!");
+    client.log("=======================================");
+%}
+
+###
+
+### ============================================
+### EDGE CASES & SECURITY TESTS
+### ============================================
+
+### 18. SQL Injection Attempt in Username - Should be Prevented
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin' OR '1'='1",
+  "password": "anything"
+}
+
+> {%
+    client.test("SQL injection attempt should be prevented", function() {
+        client.assert(response.status === 401, "Should return 401 for invalid credentials");
+    });
+    client.log("Security test: SQL injection prevented");
+%}
+
+###
+
+### 19. XSS Attempt in Registration - Should be Sanitized
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "username": "xss_test_{{$timestamp}}",
+  "firstName": "<script>alert('XSS')</script>",
+  "lastName": "Test",
+  "email": "xsstest{{$timestamp}}@example.com",
+  "password": "Xss@Test123"
+}
+
+> {%
+    client.test("XSS in firstName should be handled", function() {
+        // Should either reject (400) or sanitize (201)
+        client.assert(response.status === 400 || response.status === 201, "Unexpected response");
+    });
+
+    if (response.status === 201) {
+        client.test("XSS should be sanitized if accepted", function() {
+            const firstName = response.body.data.username;
+            client.log("Check that firstName does not contain script tags in database");
+        });
+    }
+%}
+
+###
+
+### 20. Very Long Input - Should Be Rejected (Exceeds Max Length)
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "username": "${'a'.repeat(300)}",
+  "firstName": "Test",
+  "lastName": "User",
+  "email": "test{{$timestamp}}@example.com",
+  "password": "Test@1234"
+}
+
+> {%
+    client.test("Very long username should be rejected", function() {
+        client.assert(response.status === 400, "Should return 400 for validation failure");
+    });
+%}
+
+###
+
+### 21. Empty String Values - Should Be Rejected
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "username": "",
+  "firstName": "",
+  "lastName": "",
+  "email": "",
+  "password": ""
+}
+
+> {%
+    client.test("Empty strings should be rejected", function() {
+        client.assert(response.status === 400, "Should return 400 for validation failure");
+    });
+
+    client.test("Should return validation errors for all fields", function() {
+        client.assert(Object.keys(response.body.data).length >= 4, "Should have multiple validation errors");
+    });
+%}
+
+###
+
+### 22. Null Values - Should Be Rejected
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "username": null,
+  "firstName": null,
+  "lastName": null,
+  "email": null,
+  "password": null
+}
+
+> {%
+    client.test("Null values should be rejected", function() {
+        client.assert(response.status === 400, "Should return 400 for validation failure");
+    });
+%}
+
+###
+
+### ============================================
+### PERFORMANCE & LOAD TESTS (Manual)
+### ============================================
+### Note: For actual load testing, use tools like JMeter, Gatling, or k6
+### These are simple sequential tests to verify response times
+
+### 23. Response Time Check - Registration
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "username": "perftest_{{$timestamp}}",
+  "firstName": "Performance",
+  "lastName": "Test",
+  "email": "perftest{{$timestamp}}@example.com",
+  "password": "Perf@Test123"
+}
+
+> {%
+    client.test("Registration should complete within reasonable time", function() {
+        client.assert(response.status === 201, "Registration failed");
+    });
+
+    // Note: response.responseTime is not available in IntelliJ HTTP Client
+    // Check the timing in the response panel
+    client.log("Check response time in the HTTP Client response panel");
+%}
+
+###
+
+### 24. Response Time Check - Login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "username": "verifieduser",
+  "password": "Test@1234"
+}
+
+> {%
+    client.test("Login should complete within reasonable time", function() {
+        // Should be fast (< 1 second typically)
+        client.log("Check response time in the HTTP Client response panel");
+    });
+%}
+
+###

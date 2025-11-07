@@ -1,6 +1,8 @@
 package fi.unfinitas.bookora.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import fi.unfinitas.bookora.config.BookoraProperties;
+import fi.unfinitas.bookora.config.WebConfig;
 import fi.unfinitas.bookora.config.security.JwtAuthenticationFilter;
 import fi.unfinitas.bookora.dto.request.CreateGuestBookingRequest;
 import fi.unfinitas.bookora.dto.response.BookingResponse;
@@ -17,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -33,6 +36,7 @@ import static org.mockito.Mockito.*;
 
 @WebMvcTest(GuestBookingController.class)
 @AutoConfigureMockMvc(addFilters = false)
+@Import({BookoraProperties.class, WebConfig.class})
 class GuestBookingControllerTest {
 
     @Autowired

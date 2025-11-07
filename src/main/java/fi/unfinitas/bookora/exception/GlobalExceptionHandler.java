@@ -74,6 +74,16 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Handle email not verified exception.
+     */
+    @ExceptionHandler(EmailNotVerifiedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleEmailNotVerified(final EmailNotVerifiedException ex) {
+        log.warn("Email not verified: {}", ex.getMessage());
+        final ApiResponse<Void> response = ApiResponse.fail(ex.getMessage());
+        return new ResponseEntity<>(response, HttpStatus.UNAUTHORIZED);
+    }
+
+    /**
      * Handle username not found exception.
      */
     @ExceptionHandler(UsernameNotFoundException.class)

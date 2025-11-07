@@ -2,6 +2,7 @@ package fi.unfinitas.bookora.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import fi.unfinitas.bookora.config.BookoraProperties;
+import fi.unfinitas.bookora.config.WebConfig;
 import fi.unfinitas.bookora.dto.request.ResendVerificationRequest;
 import fi.unfinitas.bookora.exception.GlobalExceptionHandler;
 import fi.unfinitas.bookora.exception.RateLimitExceededException;
@@ -17,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -34,6 +36,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 
 @WebMvcTest({EmailVerificationController.class, GlobalExceptionHandler.class})
 @AutoConfigureMockMvc(addFilters = false)
+@Import({BookoraProperties.class, WebConfig.class})
 class EmailVerificationControllerTest {
 
     @Autowired

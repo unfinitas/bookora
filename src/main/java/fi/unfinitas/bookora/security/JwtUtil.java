@@ -1,5 +1,6 @@
 package fi.unfinitas.bookora.security;
 
+import fi.unfinitas.bookora.config.BookoraProperties;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
@@ -26,13 +27,13 @@ public class JwtUtil {
     @Value("${jwt.secret}")
     private String secret;
 
-    @Value("${jwt.expiration}")
-    private Long expiration;
-
-    @Value("${jwt.refresh-expiration}")
-    private Long refreshExpiration;
+    private final BookoraProperties bookoraProperties;
 
     private SecretKey signingKey;
+
+    public JwtUtil(BookoraProperties bookoraProperties) {
+        this.bookoraProperties = bookoraProperties;
+    }
 
     /**
      * Initialize and validate JWT configuration on application startup.
@@ -95,7 +96,7 @@ public class JwtUtil {
     /**
      * Extract all claims from JWT token.
      */
-    private Claims extractAllClaims(final String token) {
+    public Claims extractAllClaims(final String token) {
         return Jwts.parser()
                 .verifyWith(getSigningKey())
                 .build()
@@ -115,15 +116,17 @@ public class JwtUtil {
      */
     public String generateAccessToken(final UserDetails userDetails) {
         final Map<String, Object> claims = new HashMap<>();
-        return createToken(claims, userDetails.getUsername(), expiration);
+        claims.put("type", "access");
+        long expirationMillis = bookoraProperties.getJwt().getAccessTokenExpirationSeconds() * 1000;
+        return createToken(claims, userDetails.getUsername(), expirationMillis);
     }
 
     /**
-     * Generate refresh token for user.
+     * Check if token is an access token.
      */
-    public String generateRefreshToken(final UserDetails userDetails) {
-        final Map<String, Object> claims = new HashMap<>();
-        return createToken(claims, userDetails.getUsername(), refreshExpiration);
+    public boolean isAccessToken(final String token) {
+        Claims claims = extractAllClaims(token);
+        return "access".equals(claims.get("type"));
     }
 
     /**
@@ -151,6 +154,6 @@ public class JwtUtil {
      * Get access token expiration time in milliseconds.
      */
     public Long getAccessTokenExpiration() {
-        return expiration;
+        return bookoraProperties.getJwt().getAccessTokenExpirationSeconds() * 1000;
     }
 }
