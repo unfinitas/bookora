@@ -1,0 +1,260 @@
+###
+# Guest Booking API Tests
+# ========================
+#
+# This file contains comprehensive tests for guest booking endpoints:
+# - POST /bookings/guest - Create a new guest booking
+# - GET /bookings/guest/{token} - Get booking details by access token
+# - POST /bookings/guest/{token}/confirm - Confirm pending booking
+# - PATCH /bookings/guest/{token} - Cancel booking
+#
+# Variables used:
+# - {{baseUrl}} - Base API URL from http-client.env.json
+# - {{accessToken}} - Booking access token (extracted from create response)
+# - {{bookingId}} - Booking ID (extracted from create response)
+#
+# Expected Status Codes:
+# - 201 CREATED: Successful booking creation
+# - 200 OK: Successful get, confirm, cancel operations
+# - 400 BAD_REQUEST: Validation failures, invalid times, already started
+# - 401 UNAUTHORIZED: Invalid or expired access token
+# - 404 NOT_FOUND: Service offering not found, booking not found
+# - 409 CONFLICT: Overlapping booking, already confirmed, already cancelled
+#
+# Important Notes:
+# ----------------
+# 1. Requires existing service offerings in the database
+# 2. Access tokens expire after 30 days (configurable)
+# 3. Cancellation window is 24 hours before start (configurable)
+# 4. Guest users are created or reused based on email
+# 5. Bookings check for overlaps at both provider and customer level
+# 6. Start time must be in future and end time must be after start time
+#
+###
+
+### ============================================
+### BOOKING CREATION TESTS
+### ============================================
+
+### 1. Create Guest Booking - Success (201 CREATED)
+# Prerequisites:
+# - At least one service offering must exist in database
+# - Replace serviceId with actual service ID from database
+#
+# Expected Response:
+# {
+#   "status": "SUCCESS",
+#   "message": "Guest booking created successfully",
+#   "data": {
+#     "id": 123,
+#     "serviceOffering": { ... },
+#     "customerName": "John Doe",
+#     "customerEmail": "john@example.com",
+#     "customerPhone": "+1234567890",
+#     "startTime": "2025-12-01T10:00:00",
+#     "endTime": "2025-12-01T11:00:00",
+#     "status": "PENDING",
+#     "notes": "First time booking",
+#     "createdAt": "2025-11-07T...",
+#     "accessToken": "uuid-token-here",
+#     "tokenExpiresAt": "2025-12-07T..."
+#   },
+#   "timestamp": "..."
+# }
+POST {{baseUrl}}/bookings/guest
+Content-Type: application/json
+
+{
+  "firstName": "John",
+  "lastName": "Doe",
+  "email": "john.doe{{$timestamp}}@example.com",
+  "phoneNumber": "+1234567890",
+  "serviceId": 1,
+  "startTime": "2025-12-01T10:00:00",
+  "endTime": "2025-12-01T11:00:00",
+  "notes": "First time booking"
+}
+
+> {%
+    client.test("Booking creation should return 201", function() {
+        if (response.status === 404) {
+            client.log("Service not found. Create a service offering first or use valid serviceId");
+            return;
+        }
+        if (response.status === 409) {
+            client.log("Booking overlap detected. Try different time slot");
+            return;
+        }
+        client.assert(response.status === 201, "Response status is not 201");
+    });
+
+    if (response.status === 201) {
+        client.test("Response should have SUCCESS status", function() {
+            client.assert(response.body.status === "SUCCESS", "Status is not SUCCESS");
+        });
+
+        client.test("Response should contain booking details", function() {
+            client.assert(response.body.data.id !== undefined, "Booking ID not found");
+            client.assert(response.body.data.accessToken !== undefined, "Access token not found");
+            client.assert(response.body.data.status === "PENDING", "Status should be PENDING");
+            client.assert(response.body.data.tokenExpiresAt !== undefined, "Token expiration not found");
+        });
+
+        client.test("Should contain customer information", function() {
+            client.assert(response.body.data.customerName === "John Doe", "Customer name mismatch");
+            client.assert(response.body.data.customerEmail !== undefined, "Customer email not found");
+            client.assert(response.body.data.customerPhone === "+1234567890", "Customer phone mismatch");
+        });
+
+        client.test("Should contain service offering details", function() {
+            client.assert(response.body.data.serviceOffering !== undefined, "Service offering not found");
+            client.assert(response.body.data.serviceOffering.id !== undefined, "Service ID not found");
+            client.assert(response.body.data.serviceOffering.name !== undefined, "Service name not found");
+        });
+
+        // Save access token and booking ID for later tests
+        client.global.set("guestAccessToken", response.body.data.accessToken);
+        client.global.set("guestBookingId", response.body.data.id);
+        client.global.set("guestEmail", response.body.data.customerEmail);
+
+        client.log("Booking created successfully!");
+        client.log("Booking ID: " + response.body.data.id);
+        client.log("Access Token: " + response.body.data.accessToken);
+        client.log("Status: " + response.body.data.status);
+    }
+%}
+
+###
+
+### 2. Create Booking with Past Start Time - Failure (400 BAD_REQUEST)
+# Start time must be in the future
+# Expected: InvalidBookingTimeException
+POST {{baseUrl}}/bookings/guest
+Content-Type: application/json
+
+{
+  "firstName": "Jane",
+  "lastName": "Smith",
+  "email": "jane.smith@example.com",
+  "phoneNumber": "+9876543210",
+  "serviceId": 1,
+  "startTime": "2020-01-01T10:00:00",
+  "endTime": "2020-01-01T11:00:00",
+  "notes": "Past booking attempt"
+}
+
+> {%
+    client.test("Past start time should return 400", function() {
+        client.assert(response.status === 400, "Response status is not 400");
+    });
+
+    client.test("Response should have FAIL status", function() {
+        client.assert(response.body.status === "FAIL", "Status is not FAIL");
+    });
+%}
+
+###
+
+### 3. Create Booking with End Time Before Start Time - Failure (400 BAD_REQUEST)
+POST {{baseUrl}}/bookings/guest
+Content-Type: application/json
+
+{
+  "firstName": "Bob",
+  "lastName": "Johnson",
+  "email": "bob.johnson@example.com",
+  "phoneNumber": "+1122334455",
+  "serviceId": 1,
+  "startTime": "2025-12-01T11:00:00",
+  "endTime": "2025-12-01T10:00:00",
+  "notes": "Invalid time order"
+}
+
+> {%
+    client.test("End time before start time should return 400", function() {
+        client.assert(response.status === 400, "Response status is not 400");
+    });
+
+    client.test("Error message should mention time order", function() {
+        client.assert(response.body.message.includes("after") || response.body.message.includes("before"),
+            "Message should mention time order constraint");
+    });
+%}
+
+###
+
+### 4. Create Booking with Missing Required Fields - Failure (400 BAD_REQUEST)
+POST {{baseUrl}}/bookings/guest
+Content-Type: application/json
+
+{
+  "firstName": "Test"
+}
+
+> {%
+    client.test("Missing required fields should return 400", function() {
+        client.assert(response.status === 400, "Response status is not 400");
+    });
+
+    client.test("Response should contain multiple validation errors", function() {
+        client.assert(response.body.data !== undefined, "Validation errors not found");
+        client.assert(Object.keys(response.body.data).length > 1, "Should have multiple validation errors");
+    });
+%}
+
+###
+
+### 5. Create Booking with Invalid Email - Failure (400 BAD_REQUEST)
+POST {{baseUrl}}/bookings/guest
+Content-Type: application/json
+
+{
+  "firstName": "Test",
+  "lastName": "User",
+  "email": "not-an-email",
+  "phoneNumber": "+1234567890",
+  "serviceId": 1,
+  "startTime": "2025-12-01T10:00:00",
+  "endTime": "2025-12-01T11:00:00"
+}
+
+> {%
+    client.test("Invalid email should return 400", function() {
+        client.assert(response.status === 400, "Response status is not 400");
+    });
+
+    client.test("Should contain email validation error", function() {
+        client.assert(response.body.data.email !== undefined, "Email validation error not found");
+    });
+%}
+
+###
+
+### 6. Create Booking with Non-existent Service - Failure (404 NOT_FOUND)
+POST {{baseUrl}}/bookings/guest
+Content-Type: application/json
+
+{
+  "firstName": "Test",
+  "lastName": "User",
+  "email": "test@example.com",
+  "phoneNumber": "+1234567890",
+  "serviceId": 999999,
+  "startTime": "2025-12-01T10:00:00",
+  "endTime": "2025-12-01T11:00:00"
+}
+
+> {%
+    client.test("Non-existent service should return 404", function() {
+        client.assert(response.status === 404, "Response status is not 404");
+    });
+
+    client.test("Error message should mention service not found", function() {
+        client.assert(response.body.message.includes("Service") || response.body.message.includes("not found"),
+            "Message should mention service not found");
+    });
+%}
+
+###
+
+

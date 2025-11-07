@@ -1,6 +1,8 @@
 package fi.unfinitas.bookora.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import fi.unfinitas.bookora.config.BookoraProperties;
+import fi.unfinitas.bookora.config.WebConfig;
 import fi.unfinitas.bookora.dto.request.LoginRequest;
 import fi.unfinitas.bookora.dto.request.RegisterRequest;
 import fi.unfinitas.bookora.dto.response.LoginResponse;
@@ -8,12 +10,15 @@ import fi.unfinitas.bookora.dto.response.UserPublicInfo;
 import fi.unfinitas.bookora.exception.EmailAlreadyExistsException;
 import fi.unfinitas.bookora.security.JwtUtil;
 import fi.unfinitas.bookora.service.AuthenticationService;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -31,6 +36,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 
 @WebMvcTest(AuthController.class)
 @AutoConfigureMockMvc(addFilters = false)
+@Import({BookoraProperties.class, WebConfig.class})
 class AuthControllerTest {
 
     @Autowired
@@ -76,7 +82,6 @@ class AuthControllerTest {
                 "testuser",
                 "USER",
                 "access-token",
-                "refresh-token",
                 "Bearer",
                 86400000L
         );
@@ -85,7 +90,6 @@ class AuthControllerTest {
 
 
     @Test
-    @DisplayName("Should successfully register new user")
     @WithMockUser
     void shouldSuccessfullyRegisterNewUser() throws Exception {
         when(authenticationService.register(any(RegisterRequest.class))).thenReturn(userPublicInfo);
@@ -104,7 +108,6 @@ class AuthControllerTest {
     }
 
     @Test
-    @DisplayName("Should return 400 when registration request is invalid")
     @WithMockUser
     void shouldReturn400WhenRegistrationRequestIsInvalid() throws Exception {
         final RegisterRequest invalidRequest = RegisterRequest.builder()
@@ -124,7 +127,6 @@ class AuthControllerTest {
     }
 
     @Test
-    @DisplayName("Should integrate with GlobalExceptionHandler for service exceptions")
     @WithMockUser
     void shouldIntegrateWithGlobalExceptionHandler() throws Exception {
         // Verify that controller properly delegates exception handling to GlobalExceptionHandler
@@ -143,10 +145,9 @@ class AuthControllerTest {
     }
 
     @Test
-    @DisplayName("Should successfully login user")
     @WithMockUser
     void shouldSuccessfullyLoginUser() throws Exception {
-        when(authenticationService.login(any(LoginRequest.class))).thenReturn(loginData);
+        when(authenticationService.login(any(LoginRequest.class), any(HttpServletResponse.class))).thenReturn(loginData);
 
         assertThat(mockMvcTester.perform(post("/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -157,15 +158,13 @@ class AuthControllerTest {
                 .hasPathSatisfying("$.message", message -> assertThat(message).isEqualTo("Login successful"))
                 .hasPathSatisfying("$.data.username", username -> assertThat(username).isEqualTo("testuser"))
                 .hasPathSatisfying("$.data.accessToken", token -> assertThat(token).isEqualTo("access-token"))
-                .hasPathSatisfying("$.data.refreshToken", token -> assertThat(token).isEqualTo("refresh-token"))
                 .hasPathSatisfying("$.data.tokenType", type -> assertThat(type).isEqualTo("Bearer"))
                 .hasPathSatisfying("$.data.expiresIn", expiresIn -> assertThat(expiresIn).isEqualTo(86400000));
 
-        verify(authenticationService).login(any(LoginRequest.class));
+        verify(authenticationService).login(any(LoginRequest.class), any(HttpServletResponse.class));
     }
 
     @Test
-    @DisplayName("Should return 400 when login request is invalid")
     @WithMockUser
     void shouldReturn400WhenLoginRequestIsInvalid() throws Exception {
         final LoginRequest invalidRequest = new LoginRequest("", "");
@@ -175,44 +174,36 @@ class AuthControllerTest {
                         .content(objectMapper.writeValueAsString(invalidRequest))))
                 .hasStatus(HttpStatus.BAD_REQUEST);
 
-        verify(authenticationService, never()).login(any(LoginRequest.class));
+        verify(authenticationService, never()).login(any(LoginRequest.class), any(HttpServletResponse.class));
     }
 
     @Test
-    @DisplayName("Should successfully refresh token")
     @WithMockUser
     void shouldSuccessfullyRefreshToken() throws Exception {
-        when(authenticationService.refreshToken(anyString())).thenReturn(loginData);
+        when(authenticationService.refreshToken(any(HttpServletRequest.class), any(HttpServletResponse.class))).thenReturn(loginData);
 
         assertThat(mockMvcTester.perform(post("/auth/refresh")
-                        .header("Authorization", "Bearer valid-refresh-token")))
+                        .cookie(new Cookie("refreshToken", "valid-refresh-token"))))
                 .hasStatusOk()
                 .bodyJson()
                 .hasPathSatisfying("$.status", status -> assertThat(status).isEqualTo("SUCCESS"))
-                .hasPathSatisfying("$.data.accessToken", token -> assertThat(token).isEqualTo("access-token"))
-                .hasPathSatisfying("$.data.refreshToken", token -> assertThat(token).isEqualTo("refresh-token"));
+                .hasPathSatisfying("$.data.accessToken", token -> assertThat(token).isEqualTo("access-token"));
 
-        verify(authenticationService).refreshToken("valid-refresh-token");
+        verify(authenticationService).refreshToken(any(HttpServletRequest.class), any(HttpServletResponse.class));
     }
 
     @Test
-    @DisplayName("Should return 401 when Authorization header is missing")
     @WithMockUser
-    void shouldReturn401WhenAuthorizationHeaderIsMissing() throws Exception {
-        assertThat(mockMvcTester.perform(post("/auth/refresh")))
-                .hasStatus(HttpStatus.BAD_REQUEST);
+    void shouldSuccessfullyLogoutUser() throws Exception {
+        doNothing().when(authenticationService).logout(any(HttpServletRequest.class), any(HttpServletResponse.class));
 
-        verify(authenticationService, never()).refreshToken(anyString());
-    }
+        assertThat(mockMvcTester.perform(post("/auth/logout")
+                        .cookie(new Cookie("refreshToken", "valid-refresh-token"))))
+                .hasStatusOk()
+                .bodyJson()
+                .hasPathSatisfying("$.status", status -> assertThat(status).isEqualTo("SUCCESS"))
+                .hasPathSatisfying("$.message", message -> assertThat(message).isEqualTo("Logout successful"));
 
-    @Test
-    @DisplayName("Should return 401 when Authorization header does not start with Bearer")
-    @WithMockUser
-    void shouldReturn401WhenAuthorizationHeaderDoesNotStartWithBearer() throws Exception {
-        assertThat(mockMvcTester.perform(post("/auth/refresh")
-                        .header("Authorization", "Basic invalid-token")))
-                .hasStatus(HttpStatus.UNAUTHORIZED);
-
-        verify(authenticationService, never()).refreshToken(anyString());
+        verify(authenticationService).logout(any(HttpServletRequest.class), any(HttpServletResponse.class));
     }
 }
