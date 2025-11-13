@@ -1,5 +1,6 @@
 package fi.unfinitas.bookora.controller;
 
+import fi.unfinitas.bookora.dto.request.ForgotPasswordRequest;
 import fi.unfinitas.bookora.dto.request.LoginRequest;
 import fi.unfinitas.bookora.dto.request.RegisterRequest;
 import fi.unfinitas.bookora.dto.response.ApiResponse;

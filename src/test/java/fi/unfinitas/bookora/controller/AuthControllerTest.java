@@ -206,4 +206,6 @@ class AuthControllerTest {
 
         verify(authenticationService).logout(any(HttpServletRequest.class), any(HttpServletResponse.class));
     }
+
+
 }

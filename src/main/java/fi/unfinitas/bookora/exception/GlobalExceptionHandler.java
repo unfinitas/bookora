@@ -323,4 +323,34 @@ public class GlobalExceptionHandler {
         final ApiResponse<Void> response = ApiResponse.fail(ex.getMessage());
         return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
     }
+
+    /**
+     * Handle password reset token invalid exception.
+     */
+    @ExceptionHandler(PasswordResetTokenInvalidException.class)
+    public ResponseEntity<ApiResponse<Void>> handlePasswordResetTokenInvalid(final PasswordResetTokenInvalidException ex) {
+        log.debug("Invalid password reset token: {}", ex.getMessage());
+        final ApiResponse<Void> response = ApiResponse.fail(ex.getMessage());
+        return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+    }
+
+    /**
+     * Handle password reset token expired exception.
+     */
+    @ExceptionHandler(PasswordResetTokenExpiredException.class)
+    public ResponseEntity<ApiResponse<Void>> handlePasswordResetTokenExpired(final PasswordResetTokenExpiredException ex) {
+        log.debug("Password reset token expired: {}", ex.getMessage());
+        final ApiResponse<Void> response = ApiResponse.fail(ex.getMessage());
+        return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+    }
+
+    /**
+     * Handle password reset token already used exception.
+     */
+    @ExceptionHandler(PasswordResetTokenAlreadyUsedException.class)
+    public ResponseEntity<ApiResponse<Void>> handlePasswordResetTokenAlreadyUsed(final PasswordResetTokenAlreadyUsedException ex) {
+        log.warn("Password reset token already used: {}", ex.getMessage());
+        final ApiResponse<Void> response = ApiResponse.fail(ex.getMessage());
+        return new ResponseEntity<>(response, HttpStatus.FORBIDDEN);
+    }
 }

@@ -98,6 +98,33 @@ public class UserService {
     }
 
     /**
+     * Update the last password reset email sent timestamp for a user.
+     *
+     * @param userId the user ID
+     */
+    @Transactional
+    public void updateLastPasswordResetEmailSentAt(final UUID userId) {
+        log.debug("Updating last password reset email sent timestamp for user ID: {}", userId);
+        final User user = findById(userId);
+        user.setLastPasswordResetEmailSentAt(java.time.LocalDateTime.now());
+        userRepository.save(user);
+    }
+
+    /**
+     * Update user password.
+     *
+     * @param userId the user ID
+     * @param rawPassword the new raw password (will be encoded)
+     */
+    @Transactional
+    public void updatePassword(final UUID userId, final String rawPassword) {
+        log.debug("Updating password for user ID: {}", userId);
+        final User user = findById(userId);
+        user.setPassword(passwordEncoder.encode(rawPassword));
+        userRepository.save(user);
+    }
+
+    /**
      * Validate that email doesn't already exist.
      *
      * @param email the email to validate

@@ -111,6 +111,27 @@ public class BookoraProperties {
 
     private Verification verification = new Verification();
 
+    @Getter
+    @Setter
+    public static class PasswordReset {
+        /**
+         * Password reset token configuration.
+         */
+        private Token token = new Token();
+
+        @Getter
+        @Setter
+        public static class Token {
+            /**
+             * Token expiration in hours.
+             */
+            @Min(value = 1, message = "Password reset token expiration must be at least 1 hour")
+            private int expirationHours = 1;
+        }
+    }
+
+    private PasswordReset passwordReset = new PasswordReset();
+
     /**
      * JWT configuration.
      */

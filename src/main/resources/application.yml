@@ -21,7 +21,7 @@ spring:
   # Actual SMTP settings are in profile-specific files
   mail:
     host: ${MAIL_HOST:localhost}
-    port: ${MAIL_PORT:1025}
+    port: ${MAIL_PORT:1027}
     username: ${MAIL_USERNAME:}
     password: ${MAIL_PASSWORD:}
     properties:
@@ -76,6 +76,11 @@ bookora:
     token:
       expiration-days: ${VERIFICATION_TOKEN_EXPIRATION_DAYS:7}
 
+  # Password Reset Configuration
+  password-reset:
+    token:
+      expiration-hours: ${PASSWORD_RESET_TOKEN_EXPIRATION_HOURS:1}
+
   # JWT Configuration
   jwt:
     access-token-expiration-seconds: ${JWT_ACCESS_TOKEN_EXPIRATION:86400}  # 24 hours
@@ -102,6 +107,13 @@ resilience4j:
     instances:
       emailVerificationResend:
         limit-for-period: 1
+        limit-refresh-period: 1h
+        timeout-duration: 0
+        allow-health-indicator-to-fail: true
+        register-health-indicator: true
+        event-consumer-buffer-size: 100
+      passwordResetRequest:
+        limit-for-period: 3
         limit-refresh-period: 1h
         timeout-duration: 0
         allow-health-indicator-to-fail: true
