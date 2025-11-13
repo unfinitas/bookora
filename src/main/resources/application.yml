@@ -1,7 +1,4 @@
 # Bookora Application Configuration
-# Base configuration shared across all profiles
-# Profile-specific settings: application-{profile}.yml
-
 spring:
   application:
     name: bookora
@@ -24,7 +21,7 @@ spring:
   # Actual SMTP settings are in profile-specific files
   mail:
     host: ${MAIL_HOST:localhost}
-    port: ${MAIL_PORT:1025}
+    port: ${MAIL_PORT:1027}
     username: ${MAIL_USERNAME:}
     password: ${MAIL_PASSWORD:}
     properties:
@@ -54,15 +51,9 @@ server:
     include-stacktrace: on_param
     include-exception: false
 
-# JWT Configuration
-jwt:
-  secret: ${JWT_SECRET:your-secret-key-here-change-in-production}
-  expiration: 86400000 # 24 hours in milliseconds
-  refresh-expiration: 604800000 # 7 days in milliseconds
-
 # Bookora Application Settings
 bookora:
-  # Frontend URL (used for redirects after verification)
+  # Frontend URL (used for redirects after verification and CORS)
   frontend-url: ${FRONTEND_URL:http://localhost:3000}
 
   # Backend URL (used in email verification links)
@@ -85,6 +76,23 @@ bookora:
     token:
       expiration-days: ${VERIFICATION_TOKEN_EXPIRATION_DAYS:7}
 
+  # Password Reset Configuration
+  password-reset:
+    token:
+      expiration-hours: ${PASSWORD_RESET_TOKEN_EXPIRATION_HOURS:1}
+
+  # JWT Configuration
+  jwt:
+    access-token-expiration-seconds: ${JWT_ACCESS_TOKEN_EXPIRATION:86400}  # 24 hours
+    refresh-token-expiration-seconds: ${JWT_REFRESH_TOKEN_EXPIRATION:604800}  # 7 days
+
+  # Cookie Configuration
+  cookie:
+    secure: ${COOKIE_SECURE:false}  # Set to true in production (HTTPS)
+    same-site: ${COOKIE_SAME_SITE:Lax}  # Strict, Lax, or None
+    domain: ${COOKIE_DOMAIN:}  # Empty for localhost, set domain in production
+    refresh-token-path: /api/auth
+
 # Logging Configuration (Base)
 logging:
   level:
@@ -99,6 +107,13 @@ resilience4j:
     instances:
       emailVerificationResend:
         limit-for-period: 1
+        limit-refresh-period: 1h
+        timeout-duration: 0
+        allow-health-indicator-to-fail: true
+        register-health-indicator: true
+        event-consumer-buffer-size: 100
+      passwordResetRequest:
+        limit-for-period: 3
         limit-refresh-period: 1h
         timeout-duration: 0
         allow-health-indicator-to-fail: true

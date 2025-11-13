@@ -1,14 +1,16 @@
 package fi.unfinitas.bookora.controller;
 
+import fi.unfinitas.bookora.dto.request.ForgotPasswordRequest;
 import fi.unfinitas.bookora.dto.request.LoginRequest;
 import fi.unfinitas.bookora.dto.request.RegisterRequest;
 import fi.unfinitas.bookora.dto.response.ApiResponse;
 import fi.unfinitas.bookora.dto.response.LoginResponse;
 import fi.unfinitas.bookora.dto.response.UserPublicInfo;
-import fi.unfinitas.bookora.exception.InvalidCredentialsException;
 import fi.unfinitas.bookora.service.AuthenticationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -46,40 +48,53 @@ public class AuthController {
      * Login a user.
      *
      * @param request the login request
-     * @return the authentication response with tokens
+     * @param response the HTTP response for setting cookies
+     * @return the authentication response with access token only
      */
     @PostMapping("/login")
-    @Operation(summary = "Login", description = "Authenticate user and return tokens")
-    public ResponseEntity<ApiResponse<LoginResponse>> login(@Valid @RequestBody final LoginRequest request) {
-        final LoginResponse data = authenticationService.login(request);
-        final ApiResponse<LoginResponse> response = ApiResponse.success("Login successful", data);
-        return ResponseEntity.ok(response);
+    @Operation(summary = "Login", description = "Authenticate user and return access token (refresh token in HttpOnly cookie)")
+    public ResponseEntity<ApiResponse<LoginResponse>> login(
+            @Valid @RequestBody final LoginRequest request,
+            HttpServletResponse response) {
+
+        final LoginResponse data = authenticationService.login(request, response);
+        final ApiResponse<LoginResponse> apiResponse = ApiResponse.success("Login successful", data);
+        return ResponseEntity.ok(apiResponse);
     }
 
     /**
-     * Refresh access token.
+     * Refresh access token using refresh token from cookie.
      *
-     * @param authHeader the authorization header (must start with "Bearer ")
-     * @return the API response with new tokens
+     * @param request the HTTP request to get refresh token from cookie
+     * @param response the HTTP response for setting new refresh token cookie
+     * @return the API response with new access token
      */
     @PostMapping("/refresh")
-    @Operation(summary = "Refresh token", description = "Refresh access token using refresh token")
+    @Operation(summary = "Refresh token", description = "Refresh access token using refresh token from cookie")
     public ResponseEntity<ApiResponse<LoginResponse>> refreshToken(
-            @RequestHeader("Authorization") final String authHeader) {
+            HttpServletRequest request,
+            HttpServletResponse response) {
 
-        validateBearerToken(authHeader);
-
-        final String token = authHeader.substring(7);
-        final LoginResponse data = authenticationService.refreshToken(token);
-        final ApiResponse<LoginResponse> response = ApiResponse.success("Token refreshed successfully", data);
-        return ResponseEntity.ok(response);
+        final LoginResponse data = authenticationService.refreshToken(request, response);
+        final ApiResponse<LoginResponse> apiResponse = ApiResponse.success("Token refreshed successfully", data);
+        return ResponseEntity.ok(apiResponse);
     }
 
-    private static void validateBearerToken(final String authHeader) {
-        if (!authHeader.startsWith("Bearer ")) {
-            throw new InvalidCredentialsException(
-                "Authorization header must start with 'Bearer '"
-            );
-        }
+    /**
+     * Logout user by revoking refresh token.
+     *
+     * @param request the HTTP request to get refresh token from cookie
+     * @param response the HTTP response for clearing cookie
+     * @return the API response
+     */
+    @PostMapping("/logout")
+    @Operation(summary = "Logout", description = "Logout user and revoke refresh token")
+    public ResponseEntity<ApiResponse<Void>> logout(
+            HttpServletRequest request,
+            HttpServletResponse response) {
+
+        authenticationService.logout(request, response);
+        final ApiResponse<Void> apiResponse = ApiResponse.success("Logout successful", null);
+        return ResponseEntity.ok(apiResponse);
     }
 }

@@ -110,4 +110,75 @@ public class BookoraProperties {
     }
 
     private Verification verification = new Verification();
+
+    @Getter
+    @Setter
+    public static class PasswordReset {
+        /**
+         * Password reset token configuration.
+         */
+        private Token token = new Token();
+
+        @Getter
+        @Setter
+        public static class Token {
+            /**
+             * Token expiration in hours.
+             */
+            @Min(value = 1, message = "Password reset token expiration must be at least 1 hour")
+            private int expirationHours = 1;
+        }
+    }
+
+    private PasswordReset passwordReset = new PasswordReset();
+
+    /**
+     * JWT configuration.
+     */
+    private Jwt jwt = new Jwt();
+
+    /**
+     * Cookie configuration.
+     */
+    private Cookie cookie = new Cookie();
+
+    @Getter
+    @Setter
+    public static class Jwt {
+        /**
+         * Access token expiration in seconds (default: 24 hours).
+         */
+        @Min(value = 60, message = "Access token expiration must be at least 60 seconds")
+        private long accessTokenExpirationSeconds = 86400; // 24 hours
+
+        /**
+         * Refresh token expiration in seconds (default: 7 days).
+         */
+        @Min(value = 60, message = "Refresh token expiration must be at least 60 seconds")
+        private long refreshTokenExpirationSeconds = 604800; // 7 days
+    }
+
+    @Getter
+    @Setter
+    public static class Cookie {
+        /**
+         * Enable secure flag for cookies (should be true in production).
+         */
+        private boolean secure = false;
+
+        /**
+         * SameSite attribute for cookies (Strict, Lax, None).
+         */
+        private String sameSite = "Lax";
+
+        /**
+         * Cookie domain (optional, useful for subdomains).
+         */
+        private String domain = "";
+
+        /**
+         * Cookie path for refresh token.
+         */
+        private String refreshTokenPath = "/api/auth";
+    }
 }

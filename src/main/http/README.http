@@ -1,0 +1,56 @@
+###
+# Bookora API - HTTP Test Files
+# ==============================
+#
+# This directory contains HTTP files for manual testing of the Bookora API.
+# Run these tests using IntelliJ IDEA's HTTP Client.
+#
+# File Structure:
+# ---------------
+# - README.http                    : This file, usage guide
+# - http-client.env.json          : Environment configurations (dev/staging/prod)
+# - auth.http                     : Authentication tests (register, login, refresh, logout)
+# - email-verification.http       : Email verification tests
+# - guest-booking.http            : Guest booking tests
+#
+# How to Use:
+# -----------
+# 1. Open any .http file in IntelliJ IDEA
+# 2. Select environment at the top (dev/staging/prod)
+# 3. Click ▶️ icon next to the request or press Ctrl+Enter
+# 4. View response (includes automatic validation scripts)
+#
+# Recommended Test Order:
+# -----------------------
+# 1. auth.http           → Register, login to obtain tokens
+# 2. email-verification.http → Email verification flow
+# 3. guest-booking.http  → Guest booking workflow
+#
+# Important Notes:
+# ----------------
+# - Some tests use response values (tokens, etc.) from previous tests
+# - Running tests in sequence will automatically set variables
+# - Read comments in each section to prepare necessary data
+# - Some tests expect specific database state
+#
+# Environment Configuration:
+# --------------------------
+# Configure environment-specific baseUrl in http-client.env.json
+# Current settings:
+# - dev     : http://localhost:8080/api
+# - staging : https://staging.bookora.com/api
+# - prod    : https://api.bookora.com/api
+#
+###
+
+### Health Check - Verify API server status
+GET {{baseUrl}}/actuator/health
+Accept: application/json
+
+> {%
+    client.test("Health check should return 200", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+%}
+
+###

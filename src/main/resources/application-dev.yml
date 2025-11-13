@@ -5,7 +5,7 @@ spring:
 
   # Database Configuration (Development)
   datasource:
-    url: jdbc:postgresql://localhost:5432/bookora
+    url: jdbc:postgresql://localhost:5435/bookora
     username: ${DB_USERNAME:bookora}
     password: ${DB_PASSWORD:bookora}
     driver-class-name: org.postgresql.Driver
@@ -47,7 +47,7 @@ spring:
   # Mail Configuration (Mailpit for local development)
   mail:
     host: localhost
-    port: 1025
+    port: 1027
     properties:
       mail:
         smtp:

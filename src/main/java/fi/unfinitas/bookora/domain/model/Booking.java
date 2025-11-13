@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
 @Table(name = "t_booking")
 @Getter
 @Setter
-@NoArgsConstructor
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
 @Builder
 @EqualsAndHashCode(of = "id", callSuper = false)

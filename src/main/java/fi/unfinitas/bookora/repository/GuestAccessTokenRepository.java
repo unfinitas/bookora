@@ -6,9 +6,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.Optional;
 import java.util.UUID;
 
-/**
- * Repository interface for GuestAccessToken entity.
- */
 public interface GuestAccessTokenRepository extends JpaRepository<GuestAccessToken, Long> {
 
     /**

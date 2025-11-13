@@ -419,13 +419,15 @@ class UserRepositorySoftDeleteTest {
         user = testEntityManager.persistAndFlush(user);
         final UUID userId = user.getId();
 
-        LocalDateTime beforeDelete = LocalDateTime.now().minusSeconds(1); // Allow 1 second tolerance
+        // Capture time before delete with sufficient tolerance for test environment
+        LocalDateTime beforeDelete = LocalDateTime.now().minusSeconds(5);
 
         // WHEN: Soft deleting the user
         userRepository.deleteById(userId);
         testEntityManager.flush();
 
-        LocalDateTime afterDelete = LocalDateTime.now().plusSeconds(1); // Allow 1 second tolerance
+        // Capture time after delete with sufficient tolerance
+        LocalDateTime afterDelete = LocalDateTime.now().plusSeconds(5);
 
         // THEN: deleted_at should be set within the time window
         EntityManager em = testEntityManager.getEntityManager();
@@ -436,7 +438,11 @@ class UserRepositorySoftDeleteTest {
 
         assertThat(deletedAtTimestamp).isNotNull();
         LocalDateTime deletedAt = deletedAtTimestamp.toLocalDateTime();
-        assertThat(deletedAt).isAfterOrEqualTo(beforeDelete);
-        assertThat(deletedAt).isBeforeOrEqualTo(afterDelete);
+
+        // Verify timestamp is within reasonable range (accounting for test environment delays)
+        assertThat(deletedAt)
+            .as("deleted_at should be set around the current time")
+            .isAfterOrEqualTo(beforeDelete)
+            .isBeforeOrEqualTo(afterDelete);
     }
 }

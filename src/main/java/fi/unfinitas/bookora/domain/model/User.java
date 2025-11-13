@@ -14,7 +14,7 @@ import static fi.unfinitas.bookora.domain.enums.UserRole.USER;
 @Entity
 @Getter
 @Setter
-@NoArgsConstructor
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
 @Builder
 @EqualsAndHashCode(of = "id", callSuper = false)
@@ -60,6 +60,9 @@ public class User extends BaseEntity {
     @Column(name = "last_verification_email_sent_at")
     private LocalDateTime lastVerificationEmailSentAt;
 
+    @Column(name = "last_password_reset_email_sent_at")
+    private LocalDateTime lastPasswordResetEmailSentAt;
+
     @PrePersist
     @PreUpdate
     private void validate() {
@@ -76,5 +79,12 @@ public class User extends BaseEntity {
             return true;
         }
         return LocalDateTime.now().isAfter(lastVerificationEmailSentAt.plusHours(1));
+    }
+
+    public boolean canResendPasswordResetEmail() {
+        if (lastPasswordResetEmailSentAt == null) {
+            return true;
+        }
+        return LocalDateTime.now().isAfter(lastPasswordResetEmailSentAt.plusHours(1));
     }
 }
